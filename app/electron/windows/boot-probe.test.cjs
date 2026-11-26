@@ -14,7 +14,9 @@ function janela({ pronto = true, claros = 20, capturar } = {}) {
   const webContents = new EventEmitter()
   webContents.executeJavaScript = async () => pronto
   webContents.capturePage = capturar ?? (async () => imagem(claros))
-  return { webContents, isDestroyed: () => false, isVisible: () => true, isMinimized: () => false }
+  const win = { webContents, recargas: 0, isDestroyed: () => false, isVisible: () => true, isMinimized: () => false }
+  webContents.reload = () => { win.recargas += 1 }
+  return win
 }
 
 async function sondar(win, evento = (wc) => wc.emit('did-finish-load')) {
@@ -70,4 +72,35 @@ test('captura que falha não derruba o app e aparece no registro', async () => {
   const item = sonda(await sondar(janela({ capturar: async () => { throw new Error('sem quadro') } })))
   assert.equal(item.level, 'warn')
   assert.equal(item.details.erro, 'sem quadro')
+})
+
+const janelaComRecarga = janela
+
+test('interface montada e janela preta: recarrega a interface uma vez só', async () => {
+  const win = janelaComRecarga({ claros: 0 })
+  const eventos = await sondar(win, (wc) => {
+    wc.emit('did-finish-load')
+    wc.emit('did-finish-load')
+  })
+  assert.equal(win.recargas, 1)
+  assert.equal(eventos.filter((item) => item.message === 'recarregou').length, 1)
+})
+
+test('superfície indisponível também recarrega', async () => {
+  const win = janelaComRecarga({ capturar: async () => { throw new Error('Current display surface not available for capture') } })
+  await sondar(win)
+  assert.equal(win.recargas, 1)
+})
+
+test('interface que não montou não recarrega sozinha: a tela de carregamento tem o botão', async () => {
+  const win = janelaComRecarga({ pronto: false, claros: 0 })
+  await sondar(win)
+  assert.equal(win.recargas, 0)
+})
+
+test('janela escondida na bandeja não recarrega', async () => {
+  const win = janelaComRecarga({ claros: 0 })
+  win.isVisible = () => false
+  await sondar(win)
+  assert.equal(win.recargas, 0)
 })

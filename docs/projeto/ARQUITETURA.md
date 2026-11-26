@@ -2557,7 +2557,9 @@ canvas, terminais e `<webview>` continuam com um estado so e mudam de janela sem
   so o teste dela liga com `FELIXO_DEVTOOLS_TRAY=1` e porta de depuracao valida.
 - **Sonda de abertura** (`boot-probe.cjs`): 6 s depois de cada carga da janela principal (ou aos 15 s, se ela
   nunca carregar) grava no QA Logger, escopo `main:boot-probe`, se o React montou e a fração de pixels claros da
-  captura. Aviso com `erro` de superfície indisponível = o quadro não chegou à tela (GPU/compositor). Só observa.
+  captura. Interface montada com a janela visível e preta, ou sem superfície de exibição: recarrega a interface uma vez
+  por abertura (`recarregou`). A janela principal nasce oculta e só aparece no `ready-to-show`, já maximizada se for
+  o caso (`revealWhenPainted`, limite de 3 s): mostrar e maximizar antes do primeiro quadro deixava a tela preta (Windows e macOS).
 - **Picture-in-picture**: auxiliar de id `pip-<...>` (`aux-windows.cjs`, `isPipId`): nasce com 520x320 no canto
   inferior direito do monitor principal, `alwaysOnTop` no nivel `floating` e visivel em todas as areas de
   trabalho, e NAO segue o `hide` da principal (continua com o app na bandeja). Enquanto houver PiP, a principal

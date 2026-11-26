@@ -6,6 +6,7 @@ const {
   MAIN_WINDOW_STATE_KEY,
   registerWindowStatePersistence,
   resolveWindowState,
+  revealWhenPainted,
 } = require('./window-state.cjs')
 
 const DEFAULT_BOUNDS = { width: 1320, height: 760 }
@@ -91,4 +92,33 @@ test('persists the normal bounds and state immediately when closing', () => {
       },
     },
   ])
+})
+
+function janelaOculta() {
+  const win = new EventEmitter()
+  win.chamadas = []
+  win.isDestroyed = () => false
+  win.show = () => win.chamadas.push('show')
+  win.maximize = () => win.chamadas.push('maximize')
+  win.setFullScreen = () => win.chamadas.push('fullscreen')
+  return win
+}
+
+test('a janela só aparece depois do primeiro quadro pronto, já maximizada', () => {
+  const win = janelaOculta()
+  const agendados = []
+  revealWhenPainted(win, { isMaximized: true, isFullScreen: false }, { schedule: (fn) => agendados.push(fn) })
+  assert.deepEqual(win.chamadas, [])
+  win.emit('ready-to-show')
+  assert.deepEqual(win.chamadas, ['maximize', 'show'])
+  agendados[0]()
+  assert.deepEqual(win.chamadas, ['maximize', 'show'], 'o limite de tempo não mostra de novo')
+})
+
+test('sem o primeiro quadro, o limite de tempo mostra a janela assim mesmo', () => {
+  const win = janelaOculta()
+  const agendados = []
+  revealWhenPainted(win, { isMaximized: false, isFullScreen: false }, { schedule: (fn) => agendados.push(fn) })
+  agendados[0]()
+  assert.deepEqual(win.chamadas, ['show'])
 })

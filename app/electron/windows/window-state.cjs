@@ -96,6 +96,26 @@ function applyWindowState(browserWindow, state) {
   }
 }
 
+const REVEAL_TIMEOUT_MS = 3_000
+
+/**
+ * Mostra a janela criada com `show: false` só depois do primeiro quadro pronto
+ * (`ready-to-show`), já com o estado gravado. Mostrar e maximizar antes de o
+ * renderer desenhar deixava, às vezes, a janela preta até recarregar (Windows e
+ * macOS, 26/11/2026). O limite de tempo garante que ela nunca fique invisível.
+ */
+function revealWhenPainted(browserWindow, state, { schedule = (fn, ms) => setTimeout(fn, ms).unref?.() } = {}) {
+  let revealed = false
+  const reveal = () => {
+    if (revealed || browserWindow.isDestroyed()) return
+    revealed = true
+    applyWindowState(browserWindow, state)
+    browserWindow.show()
+  }
+  browserWindow.once('ready-to-show', reveal)
+  schedule(reveal, REVEAL_TIMEOUT_MS)
+}
+
 function registerWindowStatePersistence(browserWindow, settingsRepository, key = MAIN_WINDOW_STATE_KEY) {
   if (!settingsRepository) return () => {}
 
@@ -137,4 +157,5 @@ module.exports = {
   normalizeWindowState,
   registerWindowStatePersistence,
   resolveWindowState,
+  revealWhenPainted,
 }

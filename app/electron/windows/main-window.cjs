@@ -8,6 +8,7 @@ const {
   applyWindowState,
   registerWindowStatePersistence,
   resolveWindowState,
+  revealWhenPainted,
 } = require('./window-state.cjs')
 
 /**
@@ -67,10 +68,13 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
   const mainWindow = new BrowserWindow({
     ...mainWindowOptions,
     ...state.bounds,
+    show: false,
     backgroundColor: readWindowBackground(settingsRepository),
   })
 
-  applyWindowState(mainWindow, state)
+  // `mainWindowOptions.show` diz se ela aparece (a automação a deixa oculta); quando, decide o primeiro quadro.
+  if (mainWindowOptions.show) revealWhenPainted(mainWindow, state)
+  else applyWindowState(mainWindow, state)
   registerWindowStatePersistence(mainWindow, settingsRepository)
 
   // As mesmas guardas valem para as auxiliares (fábrica única: window-guards.cjs).

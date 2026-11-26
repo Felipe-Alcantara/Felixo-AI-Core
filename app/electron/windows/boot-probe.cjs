@@ -1,7 +1,9 @@
 /**
  * Sonda de abertura: registra no QA Logger em que camada a janela principal
  * parou, para o caso da "tela preta que some ao recarregar" (relatado em
- * 26/11/2026, sem reprodução). Só observa; não recarrega nada.
+ * 26/11/2026 no Windows e no macOS). Com a interface montada e a janela visível
+ * mas preta (ou sem superfície de exibição), recarrega a interface uma vez por
+ * abertura, como a pessoa fazia à mão; os PTYs ficam no main e não caem.
  *
  * Como ler a entrada `main:boot-probe`:
  * - `carga: 0`: a página não terminou de carregar;
@@ -19,6 +21,7 @@ const DARK_FRACTION = 0.002
 function watchBoot(win, { log, agendar = (task, ms) => setTimeout(task, ms).unref(), now = Date.now }) {
   const start = now()
   let loads = 0
+  let recovered = false
   const record = (level, message, details) =>
     log({ level, scope: 'main:boot-probe', message, details: { carga: loads, ms: now() - start, ...details } })
 
@@ -33,9 +36,20 @@ function watchBoot(win, { log, agendar = (task, ms) => setTimeout(task, ms).unre
       // Janela escondida ou minimizada não pinta: preto ali não é defeito.
       const preta = janela.visivel && !janela.minimizada && fracaoClara < DARK_FRACTION
       record(pronto && !preta ? 'info' : 'warn', 'sonda', { ...janela, pronto, fracaoClara })
+      if (pronto && preta) recover('janela-preta')
     } catch (error) {
-      record('warn', 'sonda', { ...janela, erro: error?.message ?? String(error) })
+      const erro = error?.message ?? String(error)
+      record('warn', 'sonda', { ...janela, erro })
+      if (janela.visivel && !janela.minimizada && /surface/i.test(erro)) recover('sem-superficie')
     }
+  }
+
+  // Uma vez só: se a recarga não resolver, repetir viraria um laço de recargas.
+  function recover(motivo) {
+    if (recovered || win.isDestroyed()) return
+    recovered = true
+    record('warn', 'recarregou', { motivo })
+    win.webContents.reload()
   }
 
   win.webContents.on('did-finish-load', () => {
