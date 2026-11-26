@@ -22,7 +22,9 @@
  *        bash:       export FELIXO_CHAVE_TRANSCRICAO='<chave>'
  *   3. node app/scripts/medir-transcricao-nuvem.cjs <pasta> --saida <resultado.json>
  *      OpenAI é o padrão (whisper-1, 0,006 US$/min). Outro provedor compatível:
- *      --base-url <https://...> --modelo <nome> --preco-min <US$/min do painel>.
+ *      --base-url <https://...> --modelo <nome> --preco-min <US$/min do painel>
+ *      --minimo-s <segundos cobrados no mínimo por pedido>.
+ *      No Windows, windows/medir-transcricao-nuvem.ps1 faz os passos 2 e 3.
  *   4. Conferir o custo real no painel do provedor e comparar com o estimado.
  *
  * Saída: tabela em Markdown no terminal (para colar no IA.md) e o JSON em --saida.
@@ -41,6 +43,7 @@ const FLAGS = {
   '--base-url': 'baseUrl',
   '--modelo': 'modelo',
   '--preco-min': 'preco',
+  '--minimo-s': 'minimoS',
   '--chave-env': 'chaveEnv',
   '--saida': 'saida',
 }
@@ -113,9 +116,10 @@ function validarBaseUrl(valor) {
   return valor.replace(/\/+$/, '')
 }
 
-/** Tira a chave de um texto antes de mostrar. */
+/** Tira a chave de um texto antes de mostrar, inteira ou o pedaço que a API ecoa mascarado (`sk-abcd****0000`). */
 function mascarar(texto, chave) {
-  return chave ? texto.split(chave).join('[chave]') : texto
+  const semInteira = chave ? texto.split(chave).join('[chave]') : texto
+  return semInteira.replace(/\b(?:sk|gsk)[-_][\w*-]{6,}/g, '[chave]')
 }
 
 function parseArgs(argv) {
@@ -126,6 +130,7 @@ function parseArgs(argv) {
     preco: undefined,
     chaveEnv: CHAVE_ENV_PADRAO,
     saida: null,
+    minimoS: 0,
   }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -138,10 +143,10 @@ function parseArgs(argv) {
     if (!campo) throw new Error(`opção desconhecida: ${arg}`)
     const valor = argv[++i]
     if (valor === undefined) throw new Error(`${arg} precisa de um valor`)
-    if (campo === 'preco') {
+    if (campo === 'preco' || campo === 'minimoS') {
       const numero = Number(valor)
-      if (!Number.isFinite(numero) || numero < 0) throw new Error('--preco-min precisa ser um número maior ou igual a zero')
-      opcoes.preco = numero
+      if (!Number.isFinite(numero) || numero < 0) throw new Error(`${arg} precisa ser um número maior ou igual a zero`)
+      opcoes[campo] = numero
     } else {
       opcoes[campo] = valor
     }
@@ -210,9 +215,11 @@ async function transcrever({ baseUrl, modelo, chave, audio, nome, fetchImpl = fe
   }
 }
 
-function resumir(itens, preco) {
+/** `minimoS`: o provedor cobra pelo menos isso por pedido (Groq: 10 s). */
+function resumir(itens, preco, minimoS = 0) {
   const ok = itens.filter((item) => !item.erro)
   const segundos = ok.reduce((soma, item) => soma + item.duracaoS, 0)
+  const cobrados = ok.reduce((soma, item) => soma + Math.max(item.duracaoS, minimoS), 0)
   return {
     pedidos: itens.length,
     falhas: itens.length - ok.length,
@@ -220,12 +227,12 @@ function resumir(itens, preco) {
     werMedio: ok.length ? ok.reduce((soma, item) => soma + item.wer, 0) / ok.length : null,
     minutos: segundos / 60,
     precoUsdPorMinuto: preco ?? null,
-    custoUsd: custoUsd(segundos, preco),
+    custoUsd: custoUsd(cobrados, preco),
   }
 }
 
 /** Mede cada par em sequência. Só pedidos com sucesso entram nas medianas e no custo. */
-async function medirPares({ pares, baseUrl, modelo, chave, preco, fetchImpl = fetch }) {
+async function medirPares({ pares, baseUrl, modelo, chave, preco, minimoS = 0, fetchImpl = fetch }) {
   const itens = []
   for (const par of pares) {
     const pedido = await transcrever({ baseUrl, modelo, chave, audio: par.wav, nome: `${par.nome}.wav`, fetchImpl })
@@ -240,10 +247,10 @@ async function medirPares({ pares, baseUrl, modelo, chave, preco, fetchImpl = fe
       wer: wer(par.referencia, pedido.texto),
       referencia: par.referencia,
       texto: pedido.texto,
-      custoUsd: custoUsd(par.duracaoS, preco),
+      custoUsd: custoUsd(Math.max(par.duracaoS, minimoS), preco),
     })
   }
-  return { itens, resumo: resumir(itens, preco) }
+  return { itens, resumo: resumir(itens, preco, minimoS) }
 }
 
 /** Tabela para colar no IA.md, com vírgula decimal como o resto do registro. */
@@ -272,7 +279,7 @@ async function main(argv = process.argv.slice(2), {
   imprimir = console.log,
   imprimirErro = console.error,
 } = {}) {
-  const uso = 'Uso: node medir-transcricao-nuvem.cjs <pasta> [--saida <json>] [--base-url <url>] [--modelo <nome>] [--preco-min <US$>] [--chave-env <nome>]'
+  const uso = 'Uso: node medir-transcricao-nuvem.cjs <pasta> [--saida <json>] [--base-url <url>] [--modelo <nome>] [--preco-min <US$>] [--minimo-s <segundos>] [--chave-env <nome>]'
   let opcoes
   try {
     opcoes = parseArgs(argv)
@@ -295,7 +302,7 @@ async function main(argv = process.argv.slice(2), {
   }
   const preco = precoDoPedido(opcoes.baseUrl, opcoes.modelo, opcoes.preco)
   imprimir(`${pares.length} pares · ${new URL(opcoes.baseUrl).host} · modelo ${opcoes.modelo}`)
-  const resultado = await medirPares({ pares, baseUrl: opcoes.baseUrl, modelo: opcoes.modelo, chave, preco, fetchImpl })
+  const resultado = await medirPares({ pares, baseUrl: opcoes.baseUrl, modelo: opcoes.modelo, chave, preco, minimoS: opcoes.minimoS, fetchImpl })
   if (opcoes.saida) {
     const registro = { geradoEm: new Date().toISOString(), baseUrl: opcoes.baseUrl, modelo: opcoes.modelo, ...resultado }
     fs.writeFileSync(opcoes.saida, `${JSON.stringify(registro, null, 2)}\n`)

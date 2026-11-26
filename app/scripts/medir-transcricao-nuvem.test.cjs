@@ -9,6 +9,7 @@ const {
   listarPares,
   main,
   mediana,
+  medirPares,
   parseArgs,
   tabela,
   transcrever,
@@ -129,6 +130,32 @@ test('transcrever não expõe a chave, nem quando a API a ecoa no erro', async (
   assert.match(resultado.erro, /^HTTP 401/)
   assert.ok(!resultado.erro.includes(chave))
   assert.ok(resultado.erro.includes('[chave]'))
+})
+
+test('transcrever esconde também o pedaço da chave que a API devolve mascarado', async () => {
+  for (const eco of ['sk-proj-ab************0000', 'gsk_abcd********wxyz']) {
+    const resultado = await transcrever({
+      baseUrl: 'https://api.exemplo.com/v1',
+      modelo: 'whisper-1',
+      chave: 'chave-falsa-do-teste-0003',
+      audio: Buffer.alloc(8),
+      nome: '01.wav',
+      fetchImpl: async () => respostaFalsa(401, JSON.stringify({ error: { message: `Incorrect API key provided: ${eco}.` } })),
+    })
+    assert.ok(!resultado.erro.includes(eco.slice(0, 8)), resultado.erro)
+    assert.ok(resultado.erro.includes('[chave]'))
+  }
+})
+
+test('com mínimo por pedido, o custo usa o tempo cobrado e o áudio continua o real', async () => {
+  const pares = [1, 2].map((s) => ({ nome: `0${s}`, wav: Buffer.alloc(8), referencia: 'oi', duracaoS: s * 3 }))
+  const { itens, resumo } = await medirPares({
+    pares, baseUrl: 'https://api.exemplo.com/v1', modelo: 'm', chave: 'chave-falsa', preco: 0.6, minimoS: 10,
+    fetchImpl: async () => respostaFalsa(200, JSON.stringify({ text: 'oi' })),
+  })
+  assert.ok(Math.abs(itens[0].custoUsd - 0.1) < 1e-12)
+  assert.ok(Math.abs(resumo.custoUsd - 0.2) < 1e-12)
+  assert.equal(resumo.minutos, 9 / 60)
 })
 
 test('tabela sai com vírgula decimal, marca a falha e troca a barra vertical do erro', () => {

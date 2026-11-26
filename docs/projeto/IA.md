@@ -478,3 +478,15 @@ VALIDAÇÃO: `migrar-instalacao-de-temp.test.ps1` roda o fluxo inteiro com regis
 [2026-11-26] CONTEXTO: Task 3f091f95-497e-814f (validar o ditado por voz no Windows). A pessoa informou não ter microfone disponível e pediu a simulação com um áudio do PC; autorizou desligar e religar o acesso de apps de desktop ao microfone.
 DECISÃO: nenhuma mudança no app. Novo `app/scripts/validar-ditado-windows.cjs`, em duas fases: `simulada` (WAV da voz pt-BR do Windows entregue ao Chromium por `--use-file-for-fake-audio-capture`) e `sistema` (dispositivo padrão, com o endereço de transcrição desligado). O uso do microfone é medido pelas sessões do Core Audio (`windows/capturas-de-audio.ps1`) e a chave de privacidade é mudada pela tela de Configurações (`windows/acesso-do-microfone.ps1`): no Windows 11 26300 o `ConsentStore` do registro não registra uso desde 07/10 e gravar `Deny` nele não bloqueou a captura.
 VALIDAÇÃO: os oito itens passaram. Fala simulada: texto na linha do `cmd.exe` sem Enter, cronômetro e "transcrevendo", cópia com aviso sem terminal, quatro mensagens de erro sem a chave, webm aceito, chave cifrada (`v10`, chave mestra DPAPI, nenhum arquivo com ela em texto puro). Dispositivo real: captura ativa só enquanto grava (ícone na bandeja confere), liberada ao cancelar, parar e fechar; com a chave desligada, status `denied` e mensagem com o caminho das Configurações; chave religada. NÃO validado: fala de verdade passando pelo microfone até o texto, e o 401 da API real da OpenAI (usei um servidor local que responde 401).
+
+[2026-11-26] CONTEXTO: Task 3f091f95-497e-819e (medir latência, qualidade e custo da transcrição na nuvem). A pessoa não tinha chave da OpenAI nem da Groq agora e autorizou enviar vozes públicas quando houver. **Nenhum número da nuvem foi medido.**
+DECISÃO: o conjunto de 05/10 não guardava os ids das frases, então foi montado outro, versionado em `app/scripts/frases-ditado.json` (6 do FLEURS pt_br, CC-BY 4.0, masculinas; 6 do VoxForge pt, GPL, de 3 locutoras) e baixado por `preparar-frases-ditado.py`, sem versionar áudio. `windows/medir-transcricao-nuvem.ps1` mede OpenAI e Groq com um comando, com a chave digitada escondida e só na memória. O medidor ganhou `--minimo-s` (a Groq cobra no mínimo 10 s por pedido) e passou a esconder o pedaço de chave que a API devolve mascarado. Conferido em 26/11 nas páginas oficiais: OpenAI marca o `whisper-1` (padrão do app) como descontinuado, sem data, a US$ 0,006/min; Groq `whisper-large-v3-turbo` a US$ 0,04/h.
+VALIDAÇÃO: motor local no mesmo conjunto (faster-whisper, CPU Ryzen 7 5700G, servidor aquecido; masculinas/femininas):
+
+| Modelo | Mediana | WER | Masculinas | Femininas |
+| --- | --- | --- | --- | --- |
+| tiny | 0,44 s | 57,7% | 23,8% | 91,7% |
+| base | 0,75 s | 41,4% | 13,3% | 69,4% |
+| small | 2,42 s | 18,8% | 7,1% | 30,6% |
+
+Não é comparável linha a linha com 05/10: outras frases e outra máquina. Testes do medidor 13/13; ensaio do comando único com chave falsa deu 401 sem a chave na tela, no JSON ou no ambiente.
