@@ -249,6 +249,8 @@ function parseStreamEvent(event) {
 module.exports = {
   canResume,
   createPersistentInput,
+  // O Claude Code atual (2.1.332) só emite `system/init` depois da primeira mensagem.
+  initFollowsFirstMessage: true,
   getPersistentSpawnArgs,
   getSpawnArgs,
   getResumeArgs,

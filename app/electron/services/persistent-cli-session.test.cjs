@@ -323,3 +323,32 @@ test('custo do processo persistente: o total acumulado do Claude vira o custo de
   await h.emit({ type: 'done', cost: 0.12 })
   assert.deepEqual(custos, [0.05, 0.07])
 })
+
+test('Claude que só anuncia a sessão depois da primeira mensagem recebe o prompt mesmo sem saída nenhuma', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+  const { createPersistentCliSessionManager } = require('./persistent-cli-session.cjs')
+  const claude = require('./adapters/claude-adapter.cjs')
+  const escritas = []
+  const processo = Object.assign(new (require('node:events').EventEmitter)(), {
+    stdout: new (require('node:stream').PassThrough)(),
+    stderr: new (require('node:stream').PassThrough)(),
+  })
+  const sessoes = createPersistentCliSessionManager({
+    cliManager: { spawn: () => processo, write: (_thread, texto) => { escritas.push(texto); return true }, kill: () => {}, isRunning: () => true },
+    stoppedSessions: new Set(),
+    sendTerminalEvents: () => {},
+    sendCliEvent: () => {},
+    recordModelAvailabilityEvent: () => {},
+  })
+
+  const resultado = sessoes.sendPersistentCliRequest({
+    adapter: claude, targetWebContents: {}, streamSessionId: 's1', threadId: 'thread-sem-init', prompt: 'Oi', resumePrompt: 'Oi',
+    context: {}, threadSession: {}, cliType: 'claude', model: { name: 'Claude' }, cwd: process.cwd(), orchestrationContext: {},
+  })
+
+  assert.equal(resultado.ok, true, resultado.message)
+  assert.deepEqual(escritas.filter(Boolean), [])
+  t.mock.timers.tick(5000)
+  assert.equal(JSON.parse(escritas.filter(Boolean)[0]).message.content[0].text, 'Oi')
+  assert.equal(escritas.filter(Boolean).length, 1)
+})

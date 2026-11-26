@@ -212,6 +212,12 @@ function createPersistentCliSessionManager({
         return { ok: false, message: 'Falha ao enviar prompt para a CLI persistente.' }
       }
 
+      // Quem só anuncia a sessão depois de receber algo pode não emitir nada antes:
+      // o prazo do envio conta desde já, não da primeira linha de saída.
+      if (adapter.initFollowsFirstMessage) {
+        scheduleDeferredPromptFallback(persistentSession, run)
+      }
+
       threadSession.hasStarted = true
       return { ok: true }
     } catch (error) {
@@ -429,27 +435,7 @@ function createPersistentCliSessionManager({
       return
     }
 
-    // Fallback: if the CLI emits stdout but never sends system/init
-    // (e.g. --print mode), schedule a deferred prompt delivery so we
-    // don't deadlock waiting for an event that will never arrive.
-    if (activeRun && !activeRun.didSendPrompt && !activeRun.deferredPromptFallbackTimer) {
-      activeRun.deferredPromptFallbackTimer = setTimeout(() => {
-        activeRun.deferredPromptFallbackTimer = null
-        if (!activeRun.didSendPrompt && !activeRun.didComplete) {
-          logQaEvent({
-            level: 'info',
-            scope: 'cli:deferred-prompt-fallback',
-            sessionId: threadId,
-            message: `Sending deferred prompt via fallback (no system/init received within ${DEFERRED_PROMPT_FALLBACK_MS}ms).`,
-            details: { streamSessionId },
-          })
-          writeNextPersistentInput(persistentSession, activeRun, {
-            providerSessionId: threadSession.providerSessionId,
-            persistentPhase: 'prompt',
-          })
-        }
-      }, DEFERRED_PROMPT_FALLBACK_MS)
-    }
+    scheduleDeferredPromptFallback(persistentSession, activeRun)
 
     if (cliEvent.type === 'control' || cliEvent.type === 'session') {
       return
@@ -850,6 +836,31 @@ function createPersistentCliSessionManager({
 
     clearTimeout(run.firstVisibleOutputTimer)
     run.firstVisibleOutputTimer = null
+  }
+
+  // Fallback: if the CLI never sends system/init (e.g. --print mode), deliver
+  // the prompt after a while so we don't deadlock waiting for it.
+  function scheduleDeferredPromptFallback(persistentSession, activeRun) {
+    if (activeRun && !activeRun.didSendPrompt && !activeRun.deferredPromptFallbackTimer) {
+      const { threadId, threadSession } = persistentSession
+      const { streamSessionId } = activeRun
+      activeRun.deferredPromptFallbackTimer = setTimeout(() => {
+        activeRun.deferredPromptFallbackTimer = null
+        if (!activeRun.didSendPrompt && !activeRun.didComplete) {
+          logQaEvent({
+            level: 'info',
+            scope: 'cli:deferred-prompt-fallback',
+            sessionId: threadId,
+            message: `Sending deferred prompt via fallback (no system/init received within ${DEFERRED_PROMPT_FALLBACK_MS}ms).`,
+            details: { streamSessionId },
+          })
+          writeNextPersistentInput(persistentSession, activeRun, {
+            providerSessionId: threadSession.providerSessionId,
+            persistentPhase: 'prompt',
+          })
+        }
+      }, DEFERRED_PROMPT_FALLBACK_MS)
+    }
   }
 
   function clearDeferredPromptFallback(run) {
