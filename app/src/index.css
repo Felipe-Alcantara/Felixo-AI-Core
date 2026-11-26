@@ -1320,7 +1320,8 @@
    só em número e sem a frase da seleção, ~10,5 rem; só o botão e o ícone de
    pronto, ~5,8 rem. Cada limite abaixo deixa folga sobre o que o corte
    seguinte pede, porque a fonte muda de largura entre sistemas. */
-@container felixo-statusbar (width < 40rem) {
+/* 43rem: no Linux o conteúdo inteiro pede ~41,5rem (7 px de estouro em 740 px, com 41rem úteis). */
+@container felixo-statusbar (width < 43rem) {
   [data-corte='1'] {
     position: absolute;
     width: 1px;

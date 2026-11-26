@@ -172,7 +172,7 @@ truncamento, container query ou a barra passar por baixo do inspector), valeu a
 combinação das duas últimas: `right: 0` e `bottom` do wrapper do inspector igual à altura
 da barra (`TerminalsPanel`), mais `container-type: inline-size` na barra, com
 `@container felixo-statusbar` escondendo por `data-corte` (tudo → sem workspace, "Delete" e
-texto do estado, abaixo de 40 rem de conteúdo → só números nas contagens e sem a frase da
+texto do estado, abaixo de 43 rem de conteúdo (era 40: no Linux, em 740 px, estourava 7 px) → só números nas contagens e sem a frase da
 seleção, abaixo de 28 rem → sem contagens se há botão, abaixo de 14 rem (era 13: no Linux a barra de 240 px estourava 3–7 px) → botão só com o
 ícone, abaixo de 7 rem). O que sai fica só para leitor de tela (1 px recortado), e o
 Remover nunca sai. Medido (Electron 42, Windows, janela de 768 a 1700 px com a gaveta
