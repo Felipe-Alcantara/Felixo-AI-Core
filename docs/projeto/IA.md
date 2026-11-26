@@ -490,3 +490,7 @@ VALIDAÇÃO: motor local no mesmo conjunto (faster-whisper, CPU Ryzen 7 5700G, s
 | small | 2,42 s | 18,8% | 7,1% | 30,6% |
 
 Não é comparável linha a linha com 05/10: outras frases e outra máquina. Testes do medidor 13/13; ensaio do comando único com chave falsa deu 401 sem a chave na tela, no JSON ou no ambiente.
+
+[2026-11-26] CONTEXTO: Task 3f091f95-497e-812f-a826 (repetir o ditado no Linux com microfone físico e voz humana). A máquina da sessão é Windows; a pessoa pediu um comando único para quem tiver o hardware. **A validação com microfone físico não foi feita.**
+DECISÃO: `validar-ditado-linux.cjs` ganhou a fase `fisico` (confirma o microfone padrão, pede a fala, confere os itens 1, 2 e 8 e grava 5 frases uma vez para medir `tiny`, `base` e `small` com o medidor da nuvem), e `validar-ditado-linux-fisico.sh` prepara dependências e servidor. O seletor do aviso foi corrigido (virou portal).
+VALIDAÇÃO: ensaio no GitHub Actions (run 45849004106, ubuntu-latest, PulseAudio com microfone virtual, espeak-ng, `FELIXO_DITADO_ENSAIO`): quatro itens aprovados; capturas 1 gravando e 0 após parar, cancelar e fechar. A taxa de erro do ensaio não vale (um só áudio contra cinco frases). Não exercitados: as perguntas interativas no terminal, o microfone físico e a voz humana. Depois do ensaio mudou só o texto da pergunta de confirmação.
