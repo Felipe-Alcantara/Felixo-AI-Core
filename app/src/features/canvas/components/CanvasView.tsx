@@ -3,7 +3,7 @@
 // services/node-geometry.ts, as regras de ligação arquivo↔terminal em
 // services/file-terminal-links.ts, e a UI de toolbar/painéis em
 // CanvasToolbar.tsx e CanvasToolPanels.tsx.
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
   ReactFlow,
   Background,
@@ -84,6 +84,7 @@ import {
   type ResizableSidebarWidth,
 } from '../hooks/useResizableSidebarWidth'
 import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-surfaces'
+import { effectiveSidebarCollapsed, isNarrowViewport, shouldCollapseSidebarForDrawer } from '../services/sidebar-narrow'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { useReducedMotionPreference, shouldReduceMotion } from '../../shared/accessibility/reduced-motion-preference'
 import { CanvasPerformanceSuggestion } from './CanvasPerformanceSuggestion'
@@ -304,18 +305,39 @@ function writeSidebarCollapsed(collapsed: boolean): void {
   }
 }
 
+function subscribeToWindowResize(onChange: () => void): () => void {
+  window.addEventListener('resize', onChange)
+  return () => window.removeEventListener('resize', onChange)
+}
+
+function readNarrowViewport(): boolean {
+  return isNarrowViewport(window.innerWidth)
+}
+
 export function CanvasView({ onOpenChat }: CanvasViewProps) {
   // Fonte da verdade: o provider de superfícies embrulha `CanvasInner` por
   // fora, então o estado não pode morar dentro dele — ficaria inacessível
   // pra quem calcula `toolbarWidth` aqui. Lembrada entre sessões como as
   // outras preferências de layout (`panel-sizing.ts`, `terminal-drawer-pin.ts`).
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+  const [storedSidebarCollapsed, setStoredSidebarCollapsed] = useState(readSidebarCollapsed)
   const sidebarResize = useResizableSidebarWidth()
+  // Janela estreita: a sidebar abre recolhida (ver `sidebar-narrow.ts`); expandir ali vale só enquanto ela seguir estreita.
+  const narrowViewport = useSyncExternalStore(subscribeToWindowResize, readNarrowViewport, () => false)
+  const [narrowExpanded, setNarrowExpanded] = useState(false)
+  if (!narrowViewport && narrowExpanded) setNarrowExpanded(false)
+  const sidebarCollapsed = effectiveSidebarCollapsed({ narrow: narrowViewport, stored: storedSidebarCollapsed, narrowExpanded })
 
-  const changeSidebarCollapsed = useCallback((collapsed: boolean) => {
-    setSidebarCollapsed(collapsed)
-    writeSidebarCollapsed(collapsed)
-  }, [])
+  const changeSidebarCollapsed = useCallback(
+    (collapsed: boolean) => {
+      if (narrowViewport) {
+        setNarrowExpanded(!collapsed)
+        return
+      }
+      setStoredSidebarCollapsed(collapsed)
+      writeSidebarCollapsed(collapsed)
+    },
+    [narrowViewport],
+  )
 
   return (
     <TerminalSessionProvider>
@@ -343,7 +365,7 @@ type CanvasInnerProps = CanvasViewProps & {
 
 function CanvasInner({
   onOpenChat,
-  sidebarCollapsed,
+  sidebarCollapsed: parentSidebarCollapsed,
   onSidebarCollapsedChange,
   sidebarResize,
 }: CanvasInnerProps) {
@@ -351,6 +373,8 @@ function CanvasInner({
   // minimap já vem pronto do provider — computado uma vez a partir de
   // occupancy/viewport internamente, não recalculado aqui.
   const { occupancy, minimap: miniMap, viewport } = useCanvasSurfaces()
+  const sidebarCollapsed = parentSidebarCollapsed ||
+    shouldCollapseSidebarForDrawer(viewport.width, occupancy.drawer)
   const layoutWarning = canvasSurfaceLayoutWarning(viewport, occupancy)
   const freeArea = freeCanvasArea(viewport, occupancy)
   const { performanceMode } = usePerformanceMode()
@@ -2537,11 +2561,11 @@ function CanvasInner({
 
   return (
     <div
-      className={`flex h-full w-full ${sidebarResize.resizing ? 'is-sidebar-resizing' : ''}`}
+      className={`relative flex h-full w-full ${sidebarResize.resizing ? 'is-sidebar-resizing' : ''}`}
       // A largura da sidebar vira variável CSS aqui, na raiz: a própria
       // sidebar, a barra superior, a de status e o pill de zoom leem dela,
       // então arrastar move todos juntos sem uma segunda fonte de estado.
-      style={{ '--felixo-sidebar-width': `${sidebarResize.width}px` } as CSSProperties}
+      style={{ '--felixo-sidebar-width': `${toolbarColumnOffset(sidebarCollapsed, sidebarResize.width)}px` } as CSSProperties}
       data-felixo-canvas-ready
       // Sinal explícito de prontidão para o smoke (em vez de ler o texto da barra de status).
       data-felixo-hydrated={hydrated ? 'true' : 'false'}

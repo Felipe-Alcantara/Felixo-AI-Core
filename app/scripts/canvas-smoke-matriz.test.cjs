@@ -28,6 +28,7 @@ function allSurfaces(overrides = {}) {
     minimap: rect(1060, 600, 1260, 750),
     inspector: rect(992, 60, 1280, 560),
     'inspector-puck': null,
+    drawer: null,
     ...overrides,
   }
   return Object.entries(base).map(([name, box]) => (box ? surface(name, box) : { name, visible: false, rect: null }))
@@ -60,6 +61,22 @@ test('exige as superfícies obrigatórias e aceita a falta do Mini Map', () => {
   assert.deepEqual(findMissingSurfaces(allSurfaces({ minimap: null }), CASE), [])
   const problems = findMissingSurfaces(allSurfaces({ statusbar: null }), CASE)
   assert.deepEqual(problems, [{ name: 'statusbar', reason: 'ausente' }])
+})
+
+test('a gaveta é opcional na matriz e obrigatória quando o cenário a abre', () => {
+  assert.deepEqual(findMissingSurfaces(allSurfaces(), CASE), [])
+  const missing = findMissingSurfaces(allSurfaces(), CASE, { requiredSurfaces: ['drawer'] })
+  assert.deepEqual(missing, [{ name: 'drawer', reason: 'ausente' }])
+  const surfaces = allSurfaces({ drawer: rect(800, 0, 1280, 800) })
+  const overlap = findSurfaceOverlaps(surfaces, CASE).find((item) => item.pair === 'drawer×inspector')
+  assert.equal(overlap?.overlap.width, 288)
+  assert.deepEqual(
+    findMissingSurfaces(allSurfaces({ inspector: null, zoom: null }), CASE, {
+      requireInspector: false,
+      optionalSurfaces: ['zoom'],
+    }),
+    [],
+  )
 })
 
 test('exige a lista Elementos ou o puck, e acusa superfície fora da janela', () => {
@@ -130,8 +147,8 @@ const barra = (over = {}) => ({
   ...over,
 })
 
-test('a barra com a gaveta aberta é medida em 1320 e em 768 px (critério de aceite)', () => {
-  assert.deepEqual(STATUSBAR_DRAWER_VIEWPORTS.map((viewport) => viewport.width), [1320, 768])
+test('a gaveta aberta cobre larguras estreitas, o breakpoint e janelas amplas', () => {
+  assert.deepEqual(STATUSBAR_DRAWER_VIEWPORTS.map((viewport) => viewport.width), [320, 375, 480, 640, 720, 740, 768, 980, 981, 1024, 1320, 1400, 1600])
 })
 
 test('barra de uma linha, com o Remover dentro dela e recebendo o clique, não tem problema', () => {
