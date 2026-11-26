@@ -14,6 +14,9 @@
  *   fase `extra`: rota inexistente (404) e fechar o app no meio da gravação;
  *   fase `sem-keyring`: rode com DBUS_SESSION_BUS_ADDRESS apontando para lugar
  *     nenhum; a chave precisa ser recusada, sem arquivo gravado.
+ *   fase `fisico`: microfone físico e voz de uma pessoa (itens 1, 2 e 8 e a
+ *     qualidade em 5 frases nos modelos tiny, base e small). Use o comando
+ *     único: bash scripts/validar-ditado-linux-fisico.sh
  *
  * Preparo (uma vez por sessão do sistema):
  *   pactl load-module module-null-sink sink_name=felixo_vmic_sink
@@ -34,7 +37,7 @@ const path = require('node:path')
 const APP = path.resolve(__dirname, '..')
 const [OUT, FASE = 'principal', AUDIO = path.join(process.cwd(), 'audio')] = process.argv.slice(2)
 if (!OUT) {
-  console.error('Uso: node scripts/validar-ditado-linux.cjs <saida> [principal|extra|sem-keyring] [pasta-de-audio]')
+  console.error('Uso: node scripts/validar-ditado-linux.cjs <saida> [principal|extra|sem-keyring|fisico] [pasta-de-audio]')
   process.exit(2)
 }
 fs.mkdirSync(OUT, { recursive: true })
@@ -42,6 +45,22 @@ const { connect, readState } = require(path.join(APP, 'electron/cli/felixo-devto
 const cli = (...args) =>
   execFileSync('node', [path.join(APP, 'electron/cli/felixo.cjs'), 'devtools', ...args], { cwd: APP, encoding: 'utf8', timeout: 240_000 }).trim()
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+/** Ensaio sem pessoa (CI): este WAV é tocado no microfone virtual no lugar da fala. */
+const ENSAIO = process.env.FELIXO_DITADO_ENSAIO ?? ''
+const FRASES = [
+  'Liste os arquivos desta pasta e mostre quais foram alterados hoje.',
+  'Crie um commit com uma mensagem curta explicando o que mudou.',
+  'Rode os testes do projeto e me avise se alguma coisa falhar.',
+  'Abra o arquivo de configuração e confira a porta do servidor local.',
+  'Antes de apagar qualquer coisa, faça uma cópia de segurança do banco de dados.',
+]
+const perguntar = (texto) => new Promise((resolve) => {
+  if (ENSAIO) return resolve('s')
+  const leitor = require('node:readline').createInterface({ input: process.stdin, output: process.stdout })
+  leitor.question(texto, (resposta) => { leitor.close(); resolve(resposta.trim()) })
+})
+/** Espera a pessoa ler a frase; no ensaio, toca o áudio. */
+const pessoaFala = (frase) => ENSAIO ? tocar(ENSAIO) : perguntar(`\n  Leia em voz alta: "${frase}"\n  Quando terminar, aperte Enter. `)
 const evidencia = { fase: FASE, inicio: new Date().toISOString(), itens: {} }
 const registrar = (item, dados) => {
   evidencia.itens[item] = { ...(evidencia.itens[item] ?? {}), ...dados }
@@ -65,15 +84,75 @@ function nomesDasCapturas() {
   return [...saida.matchAll(/application\.(?:name|process\.binary) = "([^"]+)"/g)].map((m) => m[1])
 }
 function tocar(arquivo) {
-  return new Promise((resolve) => spawn('paplay', ['--device=felixo_vmic_sink', path.join(AUDIO, arquivo)]).on('exit', resolve))
+  return new Promise((resolve) => spawn('paplay', ['--device=felixo_vmic_sink', path.resolve(AUDIO, arquivo)]).on('exit', resolve))
+}
+const fontePadrao = () =>
+  /Default Source: (.+)/.exec(execFileSync('pactl', ['info'], { encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } }))?.[1].trim() ?? ''
+
+/** Antes de abrir o app: o microfone padrão é o físico? Quem confirma é a pessoa. */
+async function confirmarMicrofone() {
+  const fonte = fontePadrao()
+  if ((!fonte || /\.monitor$|felixo_vmic/.test(fonte)) && !ENSAIO) {
+    throw new Error(`O microfone padrão (${fonte || 'nenhum'}) é virtual. Escolha o físico: pactl list short sources; pactl set-default-source <fonte>`)
+  }
+  if ((await perguntar(`Microfone padrão: ${fonte}\nFeche outros apps que usem o microfone (navegador, chamada).\nÉ o microfone físico em que você vai falar? (s/N) `)).toLowerCase() !== 's') {
+    throw new Error('Troque o padrão com pactl set-default-source <fonte> e rode de novo.')
+  }
+  return fonte
+}
+
+/** Grava as frases direto do microfone padrão e mede os três modelos sobre as mesmas gravações. */
+async function medirQualidade() {
+  const pasta = path.join(OUT, 'frases')
+  fs.mkdirSync(pasta, { recursive: true })
+  console.log('\nQualidade: 5 frases, gravadas uma vez.')
+  for (const [indice, frase] of FRASES.entries()) {
+    const nome = String(indice + 1).padStart(2, '0')
+    await perguntar(`\n[${nome}/05] Aperte Enter para começar a gravar. `)
+    const gravador = spawn('parecord', ['--file-format=wav', '--channels=1', '--rate=16000', path.join(pasta, `${nome}.wav`)])
+    const saiu = new Promise((resolve) => gravador.on('exit', resolve))
+    await wait(400)
+    await pessoaFala(frase)
+    await wait(400)
+    gravador.kill('SIGINT')
+    await saiu
+    fs.writeFileSync(path.join(pasta, `${nome}.txt`), `${frase}\n`)
+  }
+  const { listarPares, medirPares } = require('./medir-transcricao-nuvem.cjs')
+  const pares = listarPares(pasta)
+  const modelos = {}
+  for (const modelo of ['tiny', 'base', 'small']) {
+    const pedido = { baseUrl: 'http://127.0.0.1:8765/v1', modelo, chave: 'local-sem-chave', preco: null }
+    await medirPares({ ...pedido, pares: pares.slice(0, 1) }) // carrega o modelo fora do tempo medido
+    const { itens, resumo } = await medirPares({ ...pedido, pares })
+    modelos[modelo] = { medianaS: resumo.medianaLatenciaS, wer: resumo.werMedio, falhas: resumo.falhas, itens }
+    console.log(`  ${modelo}: mediana ${resumo.medianaLatenciaS?.toFixed(2) ?? '—'} s, palavras erradas ${resumo.werMedio === null ? '—' : `${(100 * resumo.werMedio).toFixed(1)}%`}, falhas ${resumo.falhas}`)
+  }
+  return modelos
+}
+
+/** Aprovado ou reprovado por item, a partir do que foi registrado. */
+function veredito(itens) {
+  const m = itens['8-microfone'] ?? {}
+  const fluxo = itens['1-fluxo'] ?? {}
+  const modelos = Object.values(itens.qualidade ?? {})
+  return {
+    '1-texto-na-linha-sem-enter': fluxo.estadoFinal === 'idle' && fluxo.textoNaLinha === true,
+    '2-indicadores': /\d:\d\d/.test(itens['2-indicador']?.cronometro ?? '') && fluxo.transcrevendo === true,
+    '8-microfone-liberado': m.capturasGravando > 0 && m.capturasDepoisDeParar === 0
+      && m.capturasDepoisDeCancelar === 0 && m.capturasAntesDeFechar > 0 && m.capturasDepoisDeFecharApp === 0,
+    qualidade: modelos.length === 3 && modelos.every((q) => q.falhas === 0),
+  }
 }
 
 async function main() {
+  if (FASE === 'fisico') evidencia.microfone = await confirmarMicrofone()
   console.log('launch:', cli('launch', '--visible', '--timeout', '150000').split('\n').slice(-1)[0])
   const { browser, page } = await connect(readState())
   const shot = (nome) => page.screenshot({ path: path.join(OUT, `${FASE}-${nome}.png`) })
   const estado = () => page.evaluate(() => document.querySelector('[data-dictation-state]')?.getAttribute('data-dictation-state') ?? 'sem-botao')
-  const mensagem = () => page.evaluate(() => document.querySelector('[data-dictation-state]')?.parentElement?.querySelector('[role="alert"],[role="status"]')?.textContent ?? null)
+  const mensagem = () => page.evaluate(() => [...document.querySelectorAll('[role="alert"],[role="status"]')]
+    .find((el) => [...el.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Fechar'))?.querySelector('p')?.textContent ?? null)
   const atalho = () => page.keyboard.press('Control+Shift+M')
   const esperarEstado = async (alvo, ms = 60_000) => {
     const fim = Date.now() + ms
@@ -85,8 +164,7 @@ async function main() {
   }
   const configurar = (config) => page.evaluate((c) => window.felixo.speech.saveConfig(c), config)
   const fecharAviso = () => page.evaluate(() => {
-    const aviso = document.querySelector('[data-dictation-state]')?.parentElement?.querySelector('[role="alert"],[role="status"]')
-    ;[...(aviso?.querySelectorAll('button') ?? [])].find((b) => b.textContent.trim() === 'Fechar')?.click()
+    ;[...document.querySelectorAll('[role="alert"] button,[role="status"] button')].find((b) => b.textContent.trim() === 'Fechar')?.click()
   })
 
   try {
@@ -148,6 +226,46 @@ async function main() {
       suportados: await page.evaluate(() => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
         .map((t) => `${t}=${MediaRecorder.isTypeSupported(t)}`)),
     })
+
+    if (FASE === 'fisico') {
+      const antesTexto = await textoTerminal()
+      await perguntar('\nPrimeira parte, dentro do app. Aperte Enter para começar a gravar. ')
+      const antes = capturasAbertas()
+      await atalho()
+      const gravando = await esperarEstado(['recording'], 15_000)
+      await wait(600)
+      registrar('8-microfone', { capturasAntes: antes, capturasGravando: capturasAbertas(), nomesDurante: nomesDasCapturas() })
+      await shot('1-gravando')
+      await pessoaFala(FRASES[0])
+      registrar('2-indicador', { cronometro: await page.evaluate(() => document.querySelector('[role="timer"]')?.textContent ?? null) })
+      await atalho()
+      const transcrevendo = await esperarEstado(['transcribing'], 5_000)
+      await esperarEstado(['idle', 'error'], 180_000)
+      await wait(1000)
+      const terminal = await textoTerminal()
+      await shot('3-texto-no-terminal')
+      // Sem Enter: o texto aparece e o bash não tenta executá-lo.
+      registrar('1-fluxo', { gravando, transcrevendo, estadoFinal: await estado(), aviso: await mensagem(),
+        textoNaLinha: terminal.replace(/\s+/g, '') !== antesTexto.replace(/\s+/g, '') && !/command not found|comando não encontrado/i.test(terminal),
+        linhaDoTerminal: terminal.split('\n').filter((l) => l.trim()).slice(-3) })
+      registrar('8-microfone', { capturasDepoisDeParar: capturasAbertas() })
+
+      await atalho()
+      await esperarEstado(['recording'], 15_000)
+      await wait(800)
+      await page.getByRole('button', { name: 'Descartar gravação' }).click()
+      await wait(1200)
+      registrar('8-microfone', { capturasDepoisDeCancelar: capturasAbertas() })
+
+      registrar('qualidade', await medirQualidade())
+
+      // Por último: o app é fechado no meio desta gravação (no `finally`).
+      await atalho()
+      await esperarEstado(['recording'], 15_000)
+      await wait(800)
+      registrar('8-microfone', { capturasAntesDeFechar: capturasAbertas() })
+      return
+    }
 
     // ── itens 1, 2 e 8: atalho, fala, atalho; texto na linha, sem Enter ───
     const antes = capturasAbertas()
@@ -255,6 +373,13 @@ async function main() {
     console.log('quit:', cli('quit'))
     await wait(1500)
     registrar('8-microfone', { capturasDepoisDeFecharApp: capturasAbertas() })
+    if (FASE === 'fisico') {
+      evidencia.veredito = veredito(evidencia.itens)
+      console.log('\nResultado:')
+      for (const [item, ok] of Object.entries(evidencia.veredito)) console.log(`  ${ok ? 'APROVADO ' : 'REPROVADO'} ${item}`)
+      console.log(`Evidência em ${path.resolve(OUT)}`)
+      if (Object.values(evidencia.veredito).includes(false)) process.exitCode = 1
+    }
     salvar()
   }
 }
