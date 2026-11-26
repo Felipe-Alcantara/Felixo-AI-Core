@@ -2555,6 +2555,9 @@ canvas, terminais e `<webview>` continuam com um estado so e mudam de janela sem
   comportamento de esconder. No macOS o app ja fica no Dock; em desenvolvimento, no release smoke e na
   automacao a bandeja fica desligada (o fechamento precisa encerrar o processo e liberar a porta do Vite);
   so o teste dela liga com `FELIXO_DEVTOOLS_TRAY=1` e porta de depuracao valida.
+- **Sonda de abertura** (`boot-probe.cjs`): 6 s depois de cada carga da janela principal (ou aos 15 s, se ela
+  nunca carregar) grava no QA Logger, escopo `main:boot-probe`, se o React montou e a fração de pixels claros da
+  captura. Aviso com `erro` de superfície indisponível = o quadro não chegou à tela (GPU/compositor). Só observa.
 - **Picture-in-picture**: auxiliar de id `pip-<...>` (`aux-windows.cjs`, `isPipId`): nasce com 520x320 no canto
   inferior direito do monitor principal, `alwaysOnTop` no nivel `floating` e visivel em todas as areas de
   trabalho, e NAO segue o `hide` da principal (continua com o app na bandeja). Enquanto houver PiP, a principal

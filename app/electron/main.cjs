@@ -18,6 +18,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
+const { watchBoot } = require('./windows/boot-probe.cjs')
 const { registerWindowThemeIpc } = require('./core/window-background.cjs')
 const { createAuxWindowManager } = require('./windows/aux-windows.cjs')
 const { createTrayController, trayEnabled } = require('./windows/tray-controller.cjs')
@@ -789,6 +790,7 @@ app.whenReady().then(async () => {
     auxWindows,
     trayController,
   })
+  watchBoot(mainWindow, { log: logQaEvent })
   // Nunca cai numa auxiliar: os handlers que usam isto assumem a janela do app.
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows().find((item) => !auxWindows.isAuxWindow(item))
 
