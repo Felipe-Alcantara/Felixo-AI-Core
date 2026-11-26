@@ -5,11 +5,14 @@
  *
  *   node scripts/validar-guias-projeto.cjs <saida> <executavel-do-felixo>
  *
- * Passos: arquivo `.felixo/system-design.json` pendente e nada buscado;
- * "Usar estes guias"; agente novo no projeto com o lembrete citando o guia e o
- * aviso; pasta `Padrão de qualidade - <nome>/` e a chave dela; fechar e reabrir.
- * Por fim, uma mensagem no chat com o projeto ativo: o bloco do orquestrador
- * tem de dizer quais guias valem nele.
+ * Um repositório com os dois caminhos juntos: `.felixo/system-design.json` e a
+ * pasta `Padrão de qualidade - <nome>/`. Passos (roteiro da task):
+ *   3. arquivo pendente e nada buscado;
+ *   4. "Usar estes guias" e agente novo citando o guia do arquivo, a pasta e o aviso;
+ *   5. chave da pasta desligada: agente novo deixa de citá-la e mantém o arquivo;
+ *   7. encerrar e reabrir: confirmação e chave mantidas (depois religa);
+ *   6. mensagem no chat com o projeto ativo: o bloco do orquestrador cita os dois;
+ *   8. nenhum erro no console.
  *
  * Nenhuma chave nem crédito é usado: o guia é um repositório público e o
  * `claude` no PATH da instância é falso, só grava o que o app enviou.
@@ -45,12 +48,12 @@ const conferir = (nome, ok) => {
 
 const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-guias-'))
 const userData = path.join(raiz, 'perfil')
-const comArquivo = path.join(raiz, 'projeto-arquivo')
-const comPasta = path.join(raiz, 'projeto-pasta')
-fs.mkdirSync(path.join(comArquivo, '.felixo'), { recursive: true })
-fs.writeFileSync(path.join(comArquivo, '.felixo', 'system-design.json'), JSON.stringify({ guias: [{ url: GUIA, branch: 'main' }] }, null, 2))
-fs.mkdirSync(path.join(comPasta, NOME_DA_PASTA), { recursive: true })
-fs.writeFileSync(path.join(comPasta, NOME_DA_PASTA, 'README.md'), '# Guia de teste\n')
+const projeto = path.join(raiz, 'projeto-guias')
+fs.mkdirSync(path.join(projeto, '.felixo'), { recursive: true })
+fs.writeFileSync(path.join(projeto, '.felixo', 'system-design.json'), JSON.stringify({ guias: [{ url: GUIA, branch: 'main' }] }, null, 2))
+fs.mkdirSync(path.join(projeto, NOME_DA_PASTA), { recursive: true })
+fs.writeFileSync(path.join(projeto, NOME_DA_PASTA, 'README.md'), '# Guia de teste\n')
+execFileSync('git', ['init', '-q'], { cwd: projeto })
 
 // `claude` falso (test-support/claude-falso.cjs) no PATH da instância: o app
 // nunca chama o de verdade, e o que ele envia fica gravado para conferência.
@@ -163,85 +166,94 @@ async function main() {
     await abrir()
     registrar('0-app', { versao: await app.page.evaluate(() => window.felixo.devtools.mainEval('app.getVersion()')) })
     await fechar()
-    // O app só registra pasta escolhida no diálogo nativo: os projetos entram no banco com ele fechado.
+    // O app só registra pasta escolhida no diálogo nativo: o projeto entra no banco com ele fechado.
     const banco = new (require('node:sqlite').DatabaseSync)(path.join(userData, 'database', 'felixo.sqlite'))
     const agora = new Date().toISOString()
-    for (const [id, pasta] of [['guias-arquivo', comArquivo], ['guias-pasta', comPasta]]) {
-      banco.prepare('INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-        .run(id, path.basename(pasta), fs.realpathSync(pasta), agora, agora)
-    }
+    banco.prepare('INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run('guias', path.basename(projeto), fs.realpathSync(projeto), agora, agora)
     banco.close()
 
     let page = await abrir()
-    // Um terminal comum em cada projeto: as Configurações mostram os guias das pastas em uso.
-    await page.evaluate(async ([a, b, comando]) => {
+    // Um terminal comum no projeto: as Configurações mostram os guias das pastas em uso.
+    await page.evaluate(async ([cwd, comando]) => {
       await window.felixo.canvas.clear()
-      for (const [indice, cwd] of [a, b].entries()) {
-        await window.felixo.canvas.save({ id: `shell-${indice}`, type: 'terminal', position: { x: 80 + indice * 620, y: 80 }, width: 560, height: 320,
-          data: { label: `Shell ${indice + 1}`, command: comando, args: [], cwd } })
-      }
-    }, [fs.realpathSync(comArquivo), fs.realpathSync(comPasta), process.platform === 'win32' ? 'cmd.exe' : 'sh'])
+      await window.felixo.canvas.save({ id: 'shell-0', type: 'terminal', position: { x: 80, y: 80 }, width: 560, height: 320,
+        data: { label: 'Shell', command: comando, args: [], cwd } })
+    }, [fs.realpathSync(projeto), process.platform === 'win32' ? 'cmd.exe' : 'sh'])
     await page.reload()
     await page.waitForSelector('[data-terminal-expand-trigger="shell-0"]', { timeout: 120_000 })
     await wait(5000)
 
-    // Passo 2: pendente e nada buscado.
+    /** Abre um agente novo pela interface e devolve o lembrete gravado nele. */
+    const lembreteDeAgenteNovo = async () => {
+      const antes = new Set((await lembretes(app.page)).map((n) => n.id))
+      await criarAgente(app.page, path.basename(projeto))
+      const novo = (await lembretes(app.page)).find((n) => !antes.has(n.id) && n.cwd.endsWith(path.basename(projeto)))
+      return novo?.texto.normalize('NFC') ?? ''
+    }
+    const chaveDaPasta = () => app.page.getByRole('switch', { name: 'Usar a pasta de guias do repositório' }).first()
+    const virarChave = async () => {
+      await abrirConfiguracoes(app.page)
+      await chaveDaPasta().scrollIntoViewIfNeeded()
+      await chaveDaPasta().click()
+      await wait(2500)
+      const estado = await chaveDaPasta().getAttribute('aria-checked')
+      await app.page.keyboard.press('Escape')
+      await wait(800)
+      return estado
+    }
+    const citaArquivo = (texto) => texto.includes('MDN-Web-Docs')
+    const citaPasta = (texto) => texto.includes(NOME_DA_PASTA)
+
+    // Passo 3: pendente e nada buscado.
     await abrirConfiguracoes(page)
     await page.getByText('Usar estes guias').first().scrollIntoViewIfNeeded()
-    await foto(page, '2-pendente.png')
+    await foto(page, '3-pendente.png')
     const pendente = await textoDaTela(page)
-    registrar('2-pendente', { cartao: pendente.match(/O arquivo do projeto pede[^\n]*/)?.[0] ?? null, aviso: /nada é buscado/i.test(pendente), clones: clonesDoGuia() })
-    conferir('2 arquivo pendente e nada buscado', /O arquivo do projeto pede 1 guia/.test(pendente) && /nada é buscado/i.test(pendente) && clonesDoGuia().length === 0)
+    registrar('3-pendente', { cartao: pendente.match(/O arquivo do projeto pede[^\n]*/)?.[0] ?? null, clones: clonesDoGuia() })
+    conferir('3 arquivo pendente e nada buscado', /O arquivo do projeto pede 1 guia/.test(pendente) && /nada é buscado/i.test(pendente) && clonesDoGuia().length === 0)
 
-    // Passo 3: confirmar e ler o lembrete de um agente novo no projeto.
+    // Passo 4: confirmar; o agente novo cita os dois e o aviso.
     await page.getByText('Usar estes guias').first().click()
     const fim = Date.now() + 120_000
     while (clonesDoGuia().length === 0 && Date.now() < fim) await wait(2000)
     await wait(4000)
-    await foto(page, '3-confirmado.png')
+    await foto(page, '4-confirmado.png')
     const confirmado = await textoDaTela(page)
-    registrar('3-confirmado', { cartao: confirmado.match(/Arquivo do projeto confirmado[^\n]*/)?.[0] ?? null, clones: clonesDoGuia().map((c) => path.relative(userData, c)) })
-    conferir('3 confirmação aceita e guia clonado', /Arquivo do projeto confirmado/.test(confirmado) && clonesDoGuia().length > 0)
     await page.keyboard.press('Escape')
     await wait(800)
-    await criarAgente(page, 'projeto-arquivo')
-    const doArquivo = (await lembretes(page)).find((n) => n.id !== 'shell-0' && n.cwd.endsWith('projeto-arquivo'))
-    registrar('3-lembrete', { comando: doArquivo?.comando ?? null, texto: doArquivo?.texto ?? null })
-    conferir('3 lembrete cita o guia do projeto e avisa que ele vale ali', Boolean(doArquivo?.texto.includes('MDN-Web-Docs') && /projeto/i.test(doArquivo.texto)))
+    const comOsDois = await lembreteDeAgenteNovo()
+    registrar('4-lembrete', { cartao: confirmado.match(/Arquivo do projeto confirmado[^\n]*/)?.[0] ?? null, clones: clonesDoGuia().length, texto: comOsDois })
+    conferir('4 confirmado, e o agente novo cita o guia do arquivo, a pasta e o aviso',
+      /Arquivo do projeto confirmado/.test(confirmado) && clonesDoGuia().length > 0 && citaArquivo(comOsDois) && citaPasta(comOsDois) && comOsDois.includes('Estes guias são do projeto'))
 
-    // Passo 4: pasta de guias, no lembrete e pela chave.
-    await criarAgente(page, 'projeto-pasta')
-    const daPasta = (await lembretes(page)).find((n) => n.id !== 'shell-1' && n.cwd.endsWith('projeto-pasta'))
-    registrar('4-lembrete', { texto: daPasta?.texto ?? null })
-    conferir('4 lembrete cita a pasta de guias', Boolean(daPasta?.texto.normalize('NFC').includes(NOME_DA_PASTA)))
-    await abrirConfiguracoes(page)
-    const chave = page.getByRole('switch', { name: 'Usar a pasta de guias do repositório' }).first()
-    await chave.scrollIntoViewIfNeeded()
-    const antes = await chave.getAttribute('aria-checked')
-    await chave.click()
-    await wait(2500)
-    const desligada = await chave.getAttribute('aria-checked')
-    const resolvido = () => page.evaluate(async (dir) => (await window.felixo.systemDesign.resolveProject(dir)), fs.realpathSync(comPasta))
-    const semPasta = JSON.stringify(await resolvido())
-    await foto(page, '4-chave-desligada.png')
-    registrar('4-chave', { antes, desligada })
-    conferir('4 chave desliga a pasta', antes === 'true' && desligada === 'false' && /"useGuideFolders":false/.test(semPasta))
+    // Passo 5: sem a pasta, o agente novo mantém só o guia do arquivo.
+    const desligada = await virarChave()
+    const semPasta = await lembreteDeAgenteNovo()
+    registrar('5-chave-desligada', { chave: desligada, texto: semPasta })
+    conferir('5 chave desligada: agente novo deixa de citar a pasta e mantém o arquivo', desligada === 'false' && citaArquivo(semPasta) && !citaPasta(semPasta))
 
-    // Passo 6: encerrar e reabrir mantém a confirmação e a chave.
+    // Passo 7: encerrar e reabrir mantém a confirmação e a chave; depois religa.
     await fechar()
     page = await abrir()
     await page.waitForSelector('[data-terminal-expand-trigger="shell-0"]', { timeout: 120_000 })
     await wait(5000)
     await abrirConfiguracoes(page)
     const reaberto = await textoDaTela(page)
-    const chaveDepois = await page.getByRole('switch', { name: 'Usar a pasta de guias do repositório' }).first().getAttribute('aria-checked')
-    const lembreteDepois = (await lembretes(page)).find((n) => n.id === doArquivo?.id)?.texto ?? ''
-    await foto(page, '6-reaberto.png')
-    registrar('6-reaberto', { confirmado: /Arquivo do projeto confirmado/.test(reaberto), chaveDepois })
-    conferir('6 escolhas mantidas depois de reabrir', /Arquivo do projeto confirmado/.test(reaberto) && chaveDepois === 'false' && lembreteDepois.includes('MDN-Web-Docs'))
+    const chaveDepois = await chaveDaPasta().getAttribute('aria-checked')
+    await foto(page, '7-reaberto.png')
+    await page.keyboard.press('Escape')
+    await wait(800)
+    registrar('7-reaberto', { confirmado: /Arquivo do projeto confirmado/.test(reaberto), chaveDepois })
+    conferir('7 confirmação e chave mantidas depois de reabrir', /Arquivo do projeto confirmado/.test(reaberto) && chaveDepois === 'false')
+    const religada = await virarChave()
+    const religado = await lembreteDeAgenteNovo()
+    registrar('5-religada', { chave: religada, citaPasta: citaPasta(religado) })
+    conferir('5 chave religada: agente novo volta a citar os dois', religada === 'true' && citaArquivo(religado) && citaPasta(religado))
 
-    // Passo 5: no chat, com o projeto ativo, o orquestrador recebe os guias que valem nele.
-    await page.evaluate(() => window.felixo.projects.saveActiveIds(['guias-arquivo']))
+    // Passo 6: no chat, com o projeto ativo, o orquestrador recebe os guias que valem nele.
+    page = app.page
+    await page.evaluate(() => window.felixo.projects.saveActiveIds(['guias']))
     await page.reload()
     await page.waitForFunction(() => document.documentElement.dataset.felixoAppReady === 'true', null, { timeout: 120_000 })
     await wait(4000)
@@ -255,13 +267,13 @@ async function main() {
     const prazo = Date.now() + 90_000
     const lido = () => (fs.existsSync(enviado) ? fs.readFileSync(enviado, 'utf8') : '')
     while (!lido().includes('Mensagem de teste dos guias') && Date.now() < prazo) await wait(2000)
-    await foto(page, '5-chat.png')
+    await foto(page, '6-chat.png')
     // Cada linha é um JSON: o texto enviado tem as quebras de linha escapadas.
-    const bloco = lido().split('\\n').join('\n')
+    const bloco = lido().split('\\n').join('\n').normalize('NFC')
     const inicio = bloco.indexOf('Projetos com guias próprios')
-    const trecho = inicio < 0 ? '' : bloco.slice(inicio, inicio + 400)
-    registrar('5-chat', { enviado: lido().length, trecho })
-    conferir('5 bloco do orquestrador diz quais guias valem no projeto ativo', trecho.includes('projeto-arquivo') && trecho.includes('MDN-Web-Docs'))
+    const trecho = inicio < 0 ? '' : bloco.slice(inicio, bloco.indexOf('\n\n', inicio) > inicio ? bloco.indexOf('\n\n', inicio) : inicio + 700)
+    registrar('6-chat', { enviado: lido().length, trecho })
+    conferir('6 bloco do orquestrador cita os dois guias do projeto ativo', trecho.includes(path.basename(projeto)) && citaArquivo(trecho) && trecho.includes('Teste'))
   } catch (error) {
     registrar('erro', { mensagem: String(error.stack ?? error).slice(0, 1200) })
     evidencia.falhas.push('o roteiro parou antes do fim')
