@@ -42,14 +42,22 @@ const proxy = http.createServer((pedido, resposta) => {
   pedido.pipe(saida)
 })
 
-const eventos = () => {
-  const pasta = path.join(userData, 'logs', 'qa')
-  if (!fs.existsSync(pasta)) return []
-  return fs.readdirSync(pasta)
-    .flatMap((nome) => fs.readFileSync(path.join(pasta, nome), 'utf8').split('\n'))
-    .flatMap((linha) => { try { return [JSON.parse(linha)] } catch { return [] } })
-    .filter((evento) => evento.scope === 'cli:auto-install')
+// No macOS o Electron grava os logs em ~/Library/Logs, fora do userData isolado;
+// por isso o filtro pelo horário de início, que separa esta execução de outras.
+function pastasDeLog() {
+  const pastas = [path.join(userData, 'logs', 'qa')]
+  const doMac = path.join(os.homedir(), 'Library', 'Logs')
+  if (process.platform === 'darwin' && fs.existsSync(doMac)) {
+    pastas.push(...fs.readdirSync(doMac).map((nome) => path.join(doMac, nome, 'qa')))
+  }
+  return pastas.filter((pasta) => fs.existsSync(pasta))
 }
+
+const eventos = () => pastasDeLog()
+  .flatMap((pasta) => fs.readdirSync(pasta).map((nome) => path.join(pasta, nome)))
+  .flatMap((arquivo) => fs.readFileSync(arquivo, 'utf8').split('\n'))
+  .flatMap((linha) => { try { return [JSON.parse(linha)] } catch { return [] } })
+  .filter((evento) => evento.scope === 'cli:auto-install' && Date.parse(evento.createdAt) >= inicio)
 
 proxy.listen(0, '127.0.0.1', () => {
   const env = {
