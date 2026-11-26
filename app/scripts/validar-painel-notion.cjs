@@ -98,7 +98,9 @@ async function main() {
     // Código-fonte (Electron do node_modules): vem do Vite apontado por quem chama.
     if (!/^electron(\.exe)?$/i.test(path.basename(EXE))) delete env.VITE_DEV_SERVER_URL
     // Com o Electron do node_modules, abre o código deste app (depois de `npm run build`).
-    const processo = spawn(EXE, /^electron(\.exe)?$/i.test(path.basename(EXE)) ? [APP] : [], { env, stdio: 'ignore' })
+    // A instância não pode baixar atualização: o encerramento abaixo a instalaria sobre o app em uso.
+    const semAtualizacao = '--host-resolver-rules=MAP github.com 0.0.0.0, MAP api.github.com 0.0.0.0, MAP objects.githubusercontent.com 0.0.0.0'
+    const processo = spawn(EXE, [...(/^electron(\.exe)?$/i.test(path.basename(EXE)) ? [APP] : []), semAtualizacao], { env, stdio: 'ignore' })
     const saiu = new Promise((resolve) => processo.on('exit', resolve))
     // Registrado já aqui: uma falha na abertura não pode deixar o processo vivo segurando o perfil.
     app = { processo, saiu }
