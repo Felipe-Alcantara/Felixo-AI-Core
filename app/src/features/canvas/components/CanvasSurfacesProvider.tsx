@@ -11,7 +11,12 @@ import {
   splitHorizontalSpace,
 } from '../services/canvas-surfaces'
 import { detectLiveLayoutClamp } from '../services/layout-invariants'
-import { shouldCollapseSidebarForDrawer } from '../services/sidebar-narrow'
+import {
+  DRAWER_CANVAS_STRIP,
+  DRAWER_LAYOUT_BREAKPOINT,
+  isDrawerOpen,
+  shouldCollapseSidebarForDrawer,
+} from '../services/sidebar-narrow'
 
 /**
  * Mantém quem está ocupando qual pedaço da tela do canvas.
@@ -70,18 +75,21 @@ export function CanvasSurfacesProvider({
     [],
   )
 
-  const responsiveDrawerLayout = shouldCollapseSidebarForDrawer(viewport.width, desiredDrawer)
-  const effectiveToolbarWidth = responsiveDrawerLayout
-    ? SIDEBAR_RAIL_WIDTH
-    : toolbarWidth
+  const responsiveDrawerLayout = viewport.width < DRAWER_LAYOUT_BREAKPOINT && isDrawerOpen(desiredDrawer)
+  const sidebarSqueezed = shouldCollapseSidebarForDrawer(viewport.width, desiredDrawer, toolbarWidth)
+  // Expandir à mão vence o recolhimento automático, só enquanto o aperto durar.
+  const [sidebarExpandedAnyway, setSidebarExpandedAnyway] = useState(false)
+  if (!sidebarSqueezed && sidebarExpandedAnyway) setSidebarExpandedAnyway(false)
+  const sidebarAutoCollapsed = sidebarSqueezed && !sidebarExpandedAnyway
+  const effectiveToolbarWidth = sidebarAutoCollapsed ? SIDEBAR_RAIL_WIDTH : toolbarWidth
   // Preserve room for the zoom pill and the full Elements inspector while a
   // normal drawer is open. At very small widths the drawer can shrink to its
   // existing terminal floor; maximized mode becomes an overlay instead.
-  const minimumCanvasWidth = responsiveDrawerLayout ? 240 : undefined
+  const minimumCanvasWidth = responsiveDrawerLayout ? DRAWER_CANVAS_STRIP : undefined
   const effectiveMinimumDrawerWidth = responsiveDrawerLayout
     ? Math.max(
       DRAWER_SHRINK_FLOOR_WIDTH,
-      Math.min(DRAWER_MIN_WIDTH, viewport.width - effectiveToolbarWidth - inspector - 240),
+      Math.min(DRAWER_MIN_WIDTH, viewport.width - effectiveToolbarWidth - inspector - DRAWER_CANVAS_STRIP),
     )
     : DRAWER_MIN_WIDTH
 
@@ -147,6 +155,8 @@ export function CanvasSurfacesProvider({
       dockTop,
       reportDockTop,
       dockHeight,
+      sidebarAutoCollapsed,
+      setSidebarExpandedAnyway,
       minimap: miniMapSize(freeCanvasArea(viewport, occupancy).width),
     }
   }, [
@@ -159,6 +169,7 @@ export function CanvasSurfacesProvider({
     reportInspectorWidth,
     reportPanelWidth,
     effectiveToolbarWidth,
+    sidebarAutoCollapsed,
     viewport,
   ])
 

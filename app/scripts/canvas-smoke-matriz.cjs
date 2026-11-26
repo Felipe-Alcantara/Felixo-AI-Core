@@ -225,9 +225,7 @@ function findStatusbarProblems(measure, tolerance = 1) {
   if (!bar) return [{ tipo: 'barra-ausente' }]
   if (!button) return [{ tipo: 'remover-ausente' }]
   const problems = []
-  // shortcut: no Linux a barra da gaveta estoura 3–7 px (fontes mais largas); tolera até 8 px até a task
-  // "fazer a barra de status da gaveta caber no Linux" (Notion 42391f95-497e-81f3) consertar o CSS — aí volta a `tolerance`.
-  if (overflowX > Math.max(tolerance, 8)) problems.push({ tipo: 'conteudo-estoura-a-barra', overflowX })
+  if (overflowX > tolerance) problems.push({ tipo: 'conteudo-estoura-a-barra', overflowX })
   if (overflowY > tolerance) problems.push({ tipo: 'quebra-linha', overflowY })
   const insideBar = button.left >= bar.left - tolerance && button.right <= bar.right + tolerance &&
     button.top >= bar.top - tolerance && button.bottom <= bar.bottom + tolerance

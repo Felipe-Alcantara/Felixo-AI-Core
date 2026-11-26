@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DRAWER_LAYOUT_BREAKPOINT,
   NARROW_VIEWPORT_WIDTH,
   effectiveSidebarCollapsed,
   isNarrowViewport,
@@ -31,9 +30,15 @@ describe('sidebar em janela estreita', () => {
     expect(effectiveSidebarCollapsed({ narrow: true, stored: false, narrowExpanded: true })).toBe(false)
   })
 
-  it('recolhe a navegação só com a gaveta expandida e abaixo de 1400 px', () => {
-    expect(shouldCollapseSidebarForDrawer(DRAWER_LAYOUT_BREAKPOINT - 1, 320)).toBe(true)
-    expect(shouldCollapseSidebarForDrawer(DRAWER_LAYOUT_BREAKPOINT, 320)).toBe(false)
-    expect(shouldCollapseSidebarForDrawer(768, 44)).toBe(false)
+  it('recolhe a navegação só quando a sidebar expandida não cabe com a gaveta aberta', () => {
+    // 288 (sidebar) + 440 (gaveta) + 240 (canvas) + 288 (Elementos) = 1256.
+    expect(shouldCollapseSidebarForDrawer(1255, 440, 288)).toBe(true)
+    expect(shouldCollapseSidebarForDrawer(1256, 440, 288)).toBe(false)
+    // 1280×800: o laptop comum (e a sessão C do smoke) mantém "Configurar novo agente".
+    expect(shouldCollapseSidebarForDrawer(1280, 440, 288)).toBe(false)
+    // Sidebar alargada pela pessoa aperta antes.
+    expect(shouldCollapseSidebarForDrawer(1280, 440, 320)).toBe(true)
+    // Gaveta recolhida (trilho de 44 px) não aperta nada.
+    expect(shouldCollapseSidebarForDrawer(768, 44, 288)).toBe(false)
   })
 })

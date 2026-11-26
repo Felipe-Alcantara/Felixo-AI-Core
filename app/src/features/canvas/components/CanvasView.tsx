@@ -84,7 +84,7 @@ import {
   type ResizableSidebarWidth,
 } from '../hooks/useResizableSidebarWidth'
 import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-surfaces'
-import { effectiveSidebarCollapsed, isNarrowViewport, shouldCollapseSidebarForDrawer } from '../services/sidebar-narrow'
+import { effectiveSidebarCollapsed, isNarrowViewport } from '../services/sidebar-narrow'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { useReducedMotionPreference, shouldReduceMotion } from '../../shared/accessibility/reduced-motion-preference'
 import { CanvasPerformanceSuggestion } from './CanvasPerformanceSuggestion'
@@ -366,15 +366,21 @@ type CanvasInnerProps = CanvasViewProps & {
 function CanvasInner({
   onOpenChat,
   sidebarCollapsed: parentSidebarCollapsed,
-  onSidebarCollapsedChange,
+  onSidebarCollapsedChange: onParentSidebarCollapsedChange,
   sidebarResize,
 }: CanvasInnerProps) {
   const store = useTerminalSessions()
   // minimap já vem pronto do provider — computado uma vez a partir de
   // occupancy/viewport internamente, não recalculado aqui.
-  const { occupancy, minimap: miniMap, viewport } = useCanvasSurfaces()
-  const sidebarCollapsed = parentSidebarCollapsed ||
-    shouldCollapseSidebarForDrawer(viewport.width, occupancy.drawer)
+  const { occupancy, minimap: miniMap, viewport, sidebarAutoCollapsed, setSidebarExpandedAnyway } = useCanvasSurfaces()
+  const sidebarCollapsed = parentSidebarCollapsed || sidebarAutoCollapsed
+  const onSidebarCollapsedChange = useCallback(
+    (collapsed: boolean) => {
+      setSidebarExpandedAnyway(!collapsed)
+      onParentSidebarCollapsedChange(collapsed)
+    },
+    [onParentSidebarCollapsedChange, setSidebarExpandedAnyway],
+  )
   const layoutWarning = canvasSurfaceLayoutWarning(viewport, occupancy)
   const freeArea = freeCanvasArea(viewport, occupancy)
   const { performanceMode } = usePerformanceMode()

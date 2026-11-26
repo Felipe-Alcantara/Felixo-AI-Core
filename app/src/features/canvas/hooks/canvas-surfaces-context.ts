@@ -37,6 +37,10 @@ export type CanvasSurfacesValue = {
   reportDockTop: (top: number) => void
   /** Altura do dock que precisa ser reservada no rodapé do canvas. */
   dockHeight: number
+  /** A gaveta apertou a janela e a sidebar está recolhida sem a pessoa ter pedido. */
+  sidebarAutoCollapsed: boolean
+  /** A pessoa mexeu na sidebar durante o aperto; `true` a mantém aberta. */
+  setSidebarExpandedAnyway: (expanded: boolean) => void
   /**
    * Tamanho do Mini Map pra área livre atual, já calculado uma vez aqui —
    * `miniMapSize(freeCanvasArea(...).width)` era recalculado ad-hoc em
@@ -76,6 +80,8 @@ export function useCanvasSurfaces(): CanvasSurfacesValue {
       dockTop: Number.POSITIVE_INFINITY,
       reportDockTop: () => {},
       dockHeight: 0,
+      sidebarAutoCollapsed: false,
+      setSidebarExpandedAnyway: () => {},
       minimap: null,
     }
   )

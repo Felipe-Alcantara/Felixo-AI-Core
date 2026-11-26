@@ -16,8 +16,8 @@ Fonte dos números: `panel-sizing.ts`, `canvas-surfaces.ts`, `terminal-drawer-pi
 
 Painel, gaveta do terminal e inspector **disputam a largura**; o que sobra é o
 canvas (`MIN_CANVAS_STRIP` = 160 px no layout normal). Com a gaveta expandida
-abaixo de 1400 px, a sidebar recolhe temporariamente e a conta reserva 240 px
-para zoom e inspector. Essa divisão é calculada **numa passada só**
+abaixo de 1400 px, a conta reserva 240 px para zoom e inspector, e a sidebar recolhe
+temporariamente só quando não cabe ao lado deles (1256 px com a largura padrão). Essa divisão é calculada **numa passada só**
 por `splitHorizontalSpace` — nunca cada superfície lendo o valor já cortado da
 outra. Foi essa leitura circular que gerou o loop "painel e gaveta se espremendo"
 de 12/09/2026. Qualquer redimensionamento novo na LARGURA passa por
@@ -32,7 +32,7 @@ outras superfícies (a altura do painel) não precisa falar com o coordenador.
 | Painel "workspace" (Tarefas Notion) | não (ocupa a largura livre) | não (altura toda) | — | Página, não janela: por desenho. |
 | Gaveta do terminal (`TerminalDrawer`) | **sim** (`col-resize`) | não — **por decisão** (ver abaixo) | 440 normalmente; pode encolher até 320 quando disputa espaço | Coluna de altura total; em viewports estreitos fica abaixo da topbar e acima da barra de status. Maximizada, ocupa o espaço entre a sidebar e essas duas barras. |
 | Inspector "Elementos" | não — **por decisão** (288 fixo, `INSPECTOR_WIDTH`) | preenche | 288 | Recolhe para um puck. Abaixo de 480 px começa recolhido e o puck fica no alto à direita; em layout estreito ou gaveta maximizada fica oculto até a gaveta fechar. |
-| Sidebar | não (288 expandida / 52 trilho) | preenche | 52 | Recolhe/expande. Com a gaveta expandida abaixo de 1400 px, recolhe temporariamente e restaura a preferência ao fechar a gaveta. |
+| Sidebar | não (288 expandida / 52 trilho) | preenche | 52 | Recolhe/expande. Com a gaveta expandida, recolhe temporariamente só quando não cabe: janela menor que sidebar + 440 + 240 + 288 px (1256 com a largura padrão). Expandir à mão a mantém aberta enquanto o aperto durar; fechar a gaveta restaura a preferência. |
 | Barra de status (`CanvasStatusBar`) | não — ocupa o espaço entre a sidebar e a borda direita da área do canvas | 1,875 rem (`--felixo-statusbar-height`) | ~92 px com o Remover (88 px de barra em 768 px com a gaveta aberta), ícone só no último corte | Nunca quebra linha: o que não cabe sai por cortes de container query (ver "Decisões"). Continua visível abaixo da gaveta. |
 | Mini Map | encolhe sozinho (200×150 → 96×72) | idem | 96×72 | É a única superfície que pode sumir no canvas normal; também fica oculto enquanto a gaveta ocupa o canvas. |
 
@@ -46,8 +46,9 @@ ou sobreposições; o botão Remover permaneceu dentro da barra e recebeu o cliq
 Até 980 px, a gaveta normal sai do fluxo horizontal: fica à direita da sidebar, abaixo
 da topbar e acima da barra de status. Zoom, Mini Map, Elementos e o aviso de layout
 ficam ocultos enquanto ela está aberta; voltam ao fechar. Maximizar usa o mesmo modo
-em qualquer largura. Entre 981 e 1399 px, a navegação recolhe temporariamente e a
-conta preserva espaço para zoom e Elementos. Abaixo de 480 px, Elementos também começa
+em qualquer largura. Entre 981 e 1399 px, a conta preserva espaço
+para zoom e Elementos; abaixo de 1256 px (sidebar padrão) a navegação também recolhe, e
+expandir à mão a mantém aberta. Abaixo de 480 px, Elementos também começa
 recolhido para um puck acima da pílula de zoom; abrir a lista nessa largura oculta a
 pílula até recolher a lista.
 
@@ -172,7 +173,7 @@ combinação das duas últimas: `right: 0` e `bottom` do wrapper do inspector ig
 da barra (`TerminalsPanel`), mais `container-type: inline-size` na barra, com
 `@container felixo-statusbar` escondendo por `data-corte` (tudo → sem workspace, "Delete" e
 texto do estado, abaixo de 40 rem de conteúdo → só números nas contagens e sem a frase da
-seleção, abaixo de 28 rem → sem contagens se há botão, abaixo de 13 rem → botão só com o
+seleção, abaixo de 28 rem → sem contagens se há botão, abaixo de 14 rem (era 13: no Linux a barra de 240 px estourava 3–7 px) → botão só com o
 ícone, abaixo de 7 rem). O que sai fica só para leitor de tela (1 px recortado), e o
 Remover nunca sai. Medido (Electron 42, Windows, janela de 768 a 1700 px com a gaveta
 aberta e um bloco selecionado): sem estouro, uma linha, o Remover recebe o clique em

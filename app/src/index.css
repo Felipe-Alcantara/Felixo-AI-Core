@@ -1341,8 +1341,9 @@
 }
 
 /* Com o botão na barra, as contagens saem antes dele; sem seleção elas ficam
-   até o último corte. */
-@container felixo-statusbar (width < 13rem) {
+   até o último corte. 14rem, e não 13: ao lado da gaveta a barra tem 240 px
+   (208 de conteúdo = 13rem exatos) e as fontes do Linux estouravam 3–7 px. */
+@container felixo-statusbar (width < 14rem) {
   .felixo-statusbar-group:has(.felixo-statusbar-action) .felixo-statusbar-count {
     position: absolute;
     width: 1px;
@@ -1504,7 +1505,7 @@
    navegação, o topo e a barra de status no lugar; os controles do canvas e a
    lista Elementos voltam quando a gaveta fecha. */
 @media (max-width: 980px) {
-  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) .felixo-terminal-drawer {
+  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) .felixo-terminal-drawer:not(.felixo-terminal-drawer--fullscreen) {
     position: absolute !important;
     top: var(--felixo-topbar-height);
     right: 0;
@@ -1521,7 +1522,7 @@
   }
 }
 
-[data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-maximized="true"]) .felixo-terminal-drawer {
+[data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-maximized="true"]) .felixo-terminal-drawer:not(.felixo-terminal-drawer--fullscreen) {
   position: absolute !important;
   top: var(--felixo-topbar-height);
   right: 0;
