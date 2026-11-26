@@ -4,6 +4,8 @@ const NOTION_API_VERSION = '2026-03-11'
 const DEFAULT_BASE_URL = 'https://api.notion.com'
 const MAX_PAGE_SIZE = 100
 const MAX_QUERY_PAGES = 20
+// Carga completa (o Painel conta a database inteira): 20.000 linhas.
+const MAX_COMPLETE_QUERY_PAGES = 200
 const MAX_CONTENT_DEPTH = 8
 const MAX_CONTENT_BLOCKS = 1_000
 
@@ -154,12 +156,13 @@ function createNotionClient({
     return { ...database, id: database.id || databaseId, object: 'data_source' }
   }
 
-  async function queryTasks({ dataSourceId, schema, maxPages = MAX_QUERY_PAGES } = {}) {
+  async function queryTasks({ dataSourceId, schema, complete = false, maxPages } = {}) {
+    const pageLimit = complete ? MAX_COMPLETE_QUERY_PAGES : MAX_QUERY_PAGES
     const sourceId = requireId(dataSourceId, 'data source')
     const tasks = []
     let cursor = undefined
 
-    for (let page = 0; page < Math.min(MAX_QUERY_PAGES, Math.max(1, maxPages)); page += 1) {
+    for (let page = 0; page < Math.min(pageLimit, Math.max(1, maxPages ?? pageLimit)); page += 1) {
       const payload = await request(
         `/v1/data_sources/${encodeURIComponent(sourceId)}/query`,
         {

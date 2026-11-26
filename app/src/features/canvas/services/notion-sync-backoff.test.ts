@@ -5,6 +5,8 @@ import {
   DETAILS_SYNC_BASE_INTERVAL_MS,
   nextAutoSyncDelayMs,
   nextDetailsSyncDelayMs,
+  shouldDeferBoardAutoSync,
+  TABLE_LOAD_ROW_LIMIT,
 } from './notion-sync-backoff'
 
 describe('nextAutoSyncDelayMs', () => {
@@ -35,5 +37,23 @@ describe('nextDetailsSyncDelayMs', () => {
     expect(nextDetailsSyncDelayMs(Number.NaN)).toBe(DETAILS_SYNC_BASE_INTERVAL_MS)
     expect(nextDetailsSyncDelayMs(1)).toBe(AUTO_SYNC_MAX_INTERVAL_MS)
     expect(nextDetailsSyncDelayMs(50)).toBe(AUTO_SYNC_MAX_INTERVAL_MS)
+  })
+})
+
+describe('shouldDeferBoardAutoSync', () => {
+  const grande = { isBoard: true, loading: false, rows: TABLE_LOAD_ROW_LIMIT + 1, sinceLastLoadMs: 60_000 }
+
+  it('no Painel de uma database grande, só recarrega depois de 10 min', () => {
+    expect(shouldDeferBoardAutoSync(grande)).toBe(true)
+    expect(shouldDeferBoardAutoSync({ ...grande, sinceLastLoadMs: DETAILS_SYNC_BASE_INTERVAL_MS })).toBe(false)
+  })
+
+  it('nunca enfileira outra carga do Painel enquanto uma está em andamento', () => {
+    expect(shouldDeferBoardAutoSync({ ...grande, rows: 0, loading: true })).toBe(true)
+  })
+
+  it('database pequena e tabela seguem no intervalo normal', () => {
+    expect(shouldDeferBoardAutoSync({ ...grande, rows: TABLE_LOAD_ROW_LIMIT })).toBe(false)
+    expect(shouldDeferBoardAutoSync({ ...grande, isBoard: false, loading: true })).toBe(false)
   })
 })

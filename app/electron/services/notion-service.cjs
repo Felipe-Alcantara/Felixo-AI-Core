@@ -137,6 +137,7 @@ function createNotionService({
     dataSourceId,
     search = '',
     status = 'all',
+    complete = false,
   } = {}) {
     const sourceId = requireSourceId(dataSourceId || databaseId)
     const cached = cacheRepository.readSnapshot({ connectionId, dataSourceId: sourceId })
@@ -148,15 +149,19 @@ function createNotionService({
       const result = await client.queryTasks({
         dataSourceId: source.id || sourceId,
         schema: normalizedSchema,
+        complete: complete === true,
       })
       const fetchedAt = now()
-      cacheRepository.replaceSnapshot({
-        connectionId,
-        dataSourceId: source.id || sourceId,
-        schema: normalizedSchema,
-        tasks: result.tasks,
-        fetchedAt,
-      })
+      // Uma carga cortada no teto não troca um snapshot maior (a carga completa do Painel).
+      if (!(result.nextCursor && cached.tasks.length > result.tasks.length)) {
+        cacheRepository.replaceSnapshot({
+          connectionId,
+          dataSourceId: source.id || sourceId,
+          schema: normalizedSchema,
+          tasks: result.tasks,
+          fetchedAt,
+        })
+      }
       try {
         cacheRepository.setName({
           connectionId,

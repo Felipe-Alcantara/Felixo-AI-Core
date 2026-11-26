@@ -141,6 +141,31 @@ test('listTasks sinaliza hasMore:true quando queryTasks para no teto de páginas
   assert.equal(result.hasMore, true)
 })
 
+test('a carga cortada da tabela não troca o snapshot completo do Painel', () =>
+  withRealCache(async (cache) => {
+    const tarefa = (n) => ({ id: `page-${n}`, title: `T${n}`, completed: false, fields: {} })
+    const pedidos = []
+    const service = createNotionService({
+      connectionStore: fakeStore(),
+      cacheRepository: cache,
+      clientFactory: () => ({
+        resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+        queryTasks: async ({ complete }) => {
+          pedidos.push(complete)
+          return complete ? { tasks: [tarefa(1), tarefa(2), tarefa(3)], nextCursor: null } : { tasks: [tarefa(1)], nextCursor: 'mais' }
+        },
+      }),
+      now: () => '2026-11-26T12:00:00.000Z',
+    })
+    const alvo = { connectionId: 'connection-1', dataSourceId: 'source-1' }
+    await service.listTasks({ ...alvo, complete: true })
+    const daTabela = await service.listTasks(alvo)
+
+    assert.deepEqual(pedidos, [true, false])
+    assert.equal(daTabela.tasks.length, 1)
+    assert.equal(cache.readSnapshot(alvo).tasks.length, 3)
+  }))
+
 test('listTasks sinaliza hasMore:false quando a tabela inteira coube na carga', async () => {
   const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
   const service = createNotionService({

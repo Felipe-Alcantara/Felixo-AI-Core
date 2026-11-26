@@ -756,6 +756,8 @@ declare global {
           dataSourceId?: string
           search?: string
           status?: 'all' | 'open' | 'done'
+          /** Lê a database inteira, além do teto de 2.000 linhas da tabela. */
+          complete?: boolean
         }) => Promise<NotionTasksResult>
         /** Leitura local instantânea (sem rede) — o lado "stale" do SWR. */
         getCachedTasks: (input: {

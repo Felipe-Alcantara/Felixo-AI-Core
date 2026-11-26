@@ -75,7 +75,7 @@ import {
   type PanelSyncStatus,
 } from '../../services/notion-sync-status'
 import { createRefreshCoordinator, targetChanged } from '../../services/notion-refresh-coordinator'
-import { nextAutoSyncDelayMs } from '../../services/notion-sync-backoff'
+import { TABLE_LOAD_ROW_LIMIT, nextAutoSyncDelayMs, shouldDeferBoardAutoSync } from '../../services/notion-sync-backoff'
 import {
   REPO_BOARD_VIEW,
   buildRepoCards,
@@ -315,6 +315,8 @@ export function NotionTasksPanel({
   const taskScope = useMemo(() => readTaskScope(connectionId, dataSourceId), [connectionId, dataSourceId, taskScopeVersion])
   const views = useMemo<NotionTaskView[]>(() => [...visibleBuiltInViews(taskScope.showCompleted), ...customViews], [customViews, taskScope.showCompleted])
   const isBoard = activeViewId === REPO_BOARD_VIEW.id
+  /** Andamento e tamanho da última carga, para a recarga automática do Painel. */
+  const boardLoadRef = useRef({ loading: false, rows: 0, finishedAt: 0 })
   // A aba gravada pode ter saído da barra (Todas/Concluídas com as concluídas escondidas): cai na fixa visível.
   const activeView = isBoard ? REPO_BOARD_VIEW : views.find((view) => view.id === activeViewId) || defaultTableView(taskScope.showCompleted)
   const [boardSettingsVersion, setBoardSettingsVersion] = useState(0)
@@ -454,7 +456,8 @@ export function NotionTasksPanel({
     const { silent = false } = options
     const targetConnectionId = connectionId
     const targetDataSourceId = dataSourceId
-    const query = `${activeView.statusFilter}|${querySearch}`
+    // A carga do Painel é a completa: a da tabela, com o mesmo filtro, não vale para o placar.
+    const query = `${activeView.statusFilter}|${querySearch}${isBoard ? '|completa' : ''}`
 
     return refreshCoordinatorRef.current.trigger(async (): Promise<PanelSyncStatus | undefined> => {
       if (!api || !targetConnectionId || !targetDataSourceId) {
@@ -477,6 +480,11 @@ export function NotionTasksPanel({
       }
       setError(null)
 
+      boardLoadRef.current = { ...boardLoadRef.current, loading: true }
+      const finishLoad = (rows: number) => {
+        boardLoadRef.current = { loading: false, rows, finishedAt: Date.now() }
+      }
+
       // Fase 1 (stale-while-revalidate, lado "stale"): mostra o snapshot local
       // na hora, sem esperar a rede. Um refresh silencioso (auto-sync) pula
       // isto — a lista já exibida É o snapshot mais recente que se tem.
@@ -492,7 +500,8 @@ export function NotionTasksPanel({
         hasLocalSnapshot = hasUsableCachedSnapshot(cachedResult)
         if (hasLocalSnapshot) {
           setTasks(cachedResult.tasks || [])
-          setTasksQuery(query)
+          // Um snapshot do tamanho exato do teto veio cortado: o placar espera a carga completa.
+          if (!(isBoard && cachedResult.tasks?.length === TABLE_LOAD_ROW_LIMIT)) setTasksQuery(query)
           setSchema(cachedResult.schema || {})
           setFetchedAt(cachedResult.fetchedAt || null)
         }
@@ -510,8 +519,10 @@ export function NotionTasksPanel({
         dataSourceId: targetDataSourceId,
         search: querySearch,
         status: activeView.statusFilter,
+        complete: isBoard,
       })
       if (isStale()) return undefined
+      finishLoad(result.ok ? result.tasks?.length ?? 0 : boardLoadRef.current.rows)
       setBusy(false)
       const finalStatus = decideSyncStatusAfterNetwork(result, hasLocalSnapshot)
       setSyncStatus(finalStatus)
@@ -538,7 +549,7 @@ export function NotionTasksPanel({
       }
       return finalStatus
     })
-  }, [api, connectionId, dataSourceId, querySearch, activeView.statusFilter])
+  }, [api, connectionId, dataSourceId, querySearch, activeView.statusFilter, isBoard])
 
   const filteredTasks = useMemo(
     () => filterTasksByGroup(hideCompletedTasks(filterTasksByView(tasks, activeView), taskScope.showCompleted), schema, groupFilter),
@@ -556,7 +567,7 @@ export function NotionTasksPanel({
   const detailsSchema = detailsSource.details?.schema
   const tagCandidates = useMemo(() => (detailsSchema ? listTagCandidates(detailsSchema) : []), [detailsSchema])
   const tagProperties = useMemo(() => (detailsSchema ? resolveTagProperties(detailsSchema, boardSettings) : []), [detailsSchema, boardSettings])
-  const boardReady = tasksQuery === `${REPO_BOARD_VIEW.statusFilter}|`
+  const boardReady = tasksQuery === `${REPO_BOARD_VIEW.statusFilter}||completa`
   const allBoardCards = useMemo(
     () =>
       isBoard && boardReady
@@ -696,6 +707,11 @@ export function NotionTasksPanel({
     }
     const tick = () => {
       if (cancelled) return
+      const { loading, rows, finishedAt } = boardLoadRef.current
+      if (shouldDeferBoardAutoSync({ isBoard, loading, rows, sinceLastLoadMs: Date.now() - finishedAt })) {
+        scheduleNext()
+        return
+      }
       void loadTasks({ silent: true }).then((status) => {
         if (cancelled) return
         consecutiveFailures = status === 'success' ? 0 : consecutiveFailures + 1
@@ -708,7 +724,7 @@ export function NotionTasksPanel({
       cancelled = true
       if (timerId !== undefined) window.clearTimeout(timerId)
     }
-  }, [autoSyncEnabled, connectionId, dataSourceId, loadTasks])
+  }, [autoSyncEnabled, connectionId, dataSourceId, loadTasks, isBoard])
 
   async function saveConnection() {
     if (!api) return

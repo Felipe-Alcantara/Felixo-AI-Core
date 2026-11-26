@@ -236,6 +236,32 @@ test('queryTasks para no teto de páginas e devolve o cursor restante em vez de 
   assert.equal(result.nextCursor, 'cursor-2')
 })
 
+test('queryTasks completa passa do teto da tabela (20 páginas) e termina quando a database acaba', async () => {
+  let requestCount = 0
+  const client = createNotionClient({
+    token: 'secret-test-token',
+    fetchImpl: async () => {
+      requestCount += 1
+      const acabou = requestCount === 33
+      return fakeResponse(200, {
+        object: 'list',
+        has_more: !acabou,
+        next_cursor: acabou ? null : `cursor-${requestCount}`,
+        results: [{ object: 'page', id: `page-${requestCount}`, url: null, properties: {} }],
+      })
+    },
+  })
+
+  const completa = await client.queryTasks({ dataSourceId: 'source-1', schema: {}, complete: true })
+  assert.equal(completa.tasks.length, 33)
+  assert.equal(completa.nextCursor, null)
+
+  requestCount = 0
+  const daTabela = await client.queryTasks({ dataSourceId: 'source-1', schema: {} })
+  assert.equal(daTabela.tasks.length, 20)
+  assert.equal(daTabela.nextCursor, 'cursor-20')
+})
+
 test('cliente lê o estado atual de uma página com GET, sem alterar nada', async () => {
   const requests = []
   const schema = { Name: { id: 'name', name: 'Name', type: 'title' } }

@@ -112,6 +112,13 @@ linhas isso é a diferença entre ~792 e ~15.000 chamadas de formatação.
 quando a tabela carregada está truncada, deixando claro que ordenação/filtro
 valem só pro que já chegou.
 
+O **Painel** conta a database inteira: pede `complete: true`, que sobe o teto
+para `MAX_COMPLETE_QUERY_PAGES` (20.000 linhas). Para o custo não virar recarga
+contínua, `shouldDeferBoardAutoSync` segura o auto-sync de 60 s do Painel por
+10 min quando a carga passa de 2.000 linhas e nunca enfileira outra enquanto
+uma está em andamento; e `listTasks` não troca um snapshot maior pelo de uma
+carga cortada da tabela, senão o Painel reabriria com o placar parcial.
+
 ## Uma instância por pasta de dados
 
 `electron/core/single-instance.cjs` pede `app.requestSingleInstanceLock()` logo

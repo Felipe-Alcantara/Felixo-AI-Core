@@ -20,6 +20,25 @@ export function nextAutoSyncDelayMs(consecutiveFailures: number): number {
 /** Intervalo da recarga automática da database de detalhes do Painel (muda pouco). */
 export const DETAILS_SYNC_BASE_INTERVAL_MS = 10 * 60_000
 
+/** Teto de linhas de uma carga da tabela (20 páginas de 100, `notion-client.cjs`). */
+export const TABLE_LOAD_ROW_LIMIT = 2_000
+
+/**
+ * O Painel carrega a database inteira. Acima do teto da tabela isso são dezenas
+ * de pedidos: a recarga automática passa a cada 10 min, e nunca se enfileira
+ * outra enquanto uma ainda está em andamento.
+ */
+export function shouldDeferBoardAutoSync(input: {
+  isBoard: boolean
+  loading: boolean
+  rows: number
+  sinceLastLoadMs: number
+}): boolean {
+  if (!input.isBoard) return false
+  if (input.loading) return true
+  return input.rows > TABLE_LOAD_ROW_LIMIT && input.sinceLastLoadMs < DETAILS_SYNC_BASE_INTERVAL_MS
+}
+
 /** Mesmo backoff do auto-sync das tarefas, partindo de um intervalo base maior e com o mesmo teto. */
 export function nextDetailsSyncDelayMs(consecutiveFailures: number): number {
   if (!Number.isFinite(consecutiveFailures) || consecutiveFailures <= 0) return DETAILS_SYNC_BASE_INTERVAL_MS
