@@ -64,8 +64,9 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       kind: 'live-query',
       label: 'Claude Code /usage (ao vivo)',
       docsUrl: 'https://code.claude.com/docs/en/costs',
+      // O modal do chat mostra este texto sempre: ele não pode afirmar falha.
       limitation:
-        'A consulta ao /usage do Claude não retornou um número para esta conta nesta rodada.',
+        'O limite vem do /usage de cada conta. Quando o Claude não informa uma janela, o painel não inventa o número.',
     },
   },
   {
