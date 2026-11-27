@@ -49,6 +49,7 @@ import { ClaudeApiNode } from './ClaudeApiNode'
 import { claudeApiConversations } from '../services/claude-api-conversation-store'
 import { createDraft as createCloudSessionDraft } from '../services/cloud-session-state'
 import { TerminalDrawer, type TerminalDrawerPane } from './TerminalDrawer'
+import { desistirDaReabertura, prepararReabertura } from './detached-windows-memory'
 import {
   reduceDrawerPanes,
   type DrawerPanes,
@@ -434,6 +435,9 @@ function CanvasInner({
   const expandedTerminalId = drawerPanes?.focused ?? null
   const expandedTerminalIdRef = useRef<string | null>(null)
   const commitDrawerPanes = useCallback((action: DrawerPanesAction | 'clear') => {
+    // Painel fechado antes de a janela lembrada reabrir: a pessoa desistiu dela.
+    if (action === 'clear') desistirDaReabertura(drawerPanesRef.current?.panes ?? [])
+    else if (action.type === 'close-pane') desistirDaReabertura([action.id])
     const next = action === 'clear' ? null : reduceDrawerPanes(drawerPanesRef.current, action)
     if (next === drawerPanesRef.current) return
     drawerPanesRef.current = next
@@ -902,6 +906,13 @@ function CanvasInner({
     // Sem `persistNode`: `resumeChoice` é transitória e nunca vai para o disco.
     setNodes((current) => terminalRunRegistry.applyChoices(current))
   }, [hydrated, nodes, setNodes])
+  // Reabre a gaveta nos terminais que estavam em janela própria na execução
+  // anterior; cada painel destaca o seu quando o terminal existir.
+  useEffect(() => {
+    if (!hydrated || !restoredAgentTerminals.captured) return
+    const terminais = new Set(nodesRef.current.filter((node) => node.type === 'terminal').map((node) => node.id))
+    prepararReabertura(terminais).forEach((id, indice) => openTerminal(id, { sideBySide: indice > 0 }))
+  }, [hydrated, restoredAgentTerminals.captured, openTerminal])
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
   const [flowReady, setFlowReady] = useState(false)

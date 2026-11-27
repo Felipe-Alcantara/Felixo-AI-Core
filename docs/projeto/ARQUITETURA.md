@@ -2533,6 +2533,18 @@ O app tem UM renderer, o da janela principal. Uma janela auxiliar e um `BrowserW
 com `window.open('about:blank', 'felixo-aux-<id>')` e onde desenha por portal do React (modelo do VS Code):
 canvas, terminais e `<webview>` continuam com um estado so e mudam de janela sem reiniciar.
 
+**Decisao (27/11/2026): arquitetura A.** A B (um renderer por janela, estado no processo principal) so volta
+se algo daqui deixar de valer. Medido no Windows 11, com um PowerShell de verdade, no app empacotado v0.1.635
+e no build do repositorio:
+
+| Ponto | Resultado |
+| --- | --- |
+| (a) PID, historico e digitacao | mesmo PID na principal, na auxiliar e na volta; 400 linhas inteiras; nenhum `pty:kill`; 12 ciclos pelos tres caminhos de fechamento |
+| (b) DPR entre monitores de escalas diferentes | **nao medido**: um monitor so (task propria) |
+| (c) estilos clonados, dev e build | mesma fonte, tamanho, cor e fundo do terminal nas duas janelas |
+| (d) principal minimizada | timers (11,8/s) e quadros da auxiliar (71/s) iguais; saida do terminal 28 ms (841 ms antes de o xterm seguir a janela) |
+| (e) `<webview>` na auxiliar | anexa e carrega; `will-attach-webview` chega no `webContents` da auxiliar, com `sandbox`, sem Node e sem preload; `file:` vira `about:blank` |
+
 - **Processo principal** (`app/electron/windows/`): `aux-windows.cjs` e o gerenciador (registro por id, opcoes
   fechadas, estado em `window.aux.<id>.state`, volta para um monitor visivel em `display-removed` e
   `display-metrics-changed`, fecha junto com a principal). `window-guards.cjs` e a fabrica unica de guardas
@@ -2577,5 +2589,16 @@ canvas, terminais e `<webview>` continuam com um estado so e mudam de janela sem
   estica. `TerminalDrawer` desenha a arvore em porcentagem (`layoutMosaic` num quadrado de 100 000 unidades) e as
   divisorias como `role="separator"` arrastaveis (rascunho local, gravado ao soltar). `terminal-drawer-panes.ts`
   guarda `tree` e deriva `panes` dela; teto de 8. "Terminais em tela cheia" faz a gaveta fixa cobrindo a janela.
-- **Ainda nao existe**: reabrir as auxiliares no proximo inicio, lembrar o mosaico entre sessoes e destacar nota e painel de ferramenta
-  (tarefas seguintes). Wayland: a posicao salva nao vale (o compositor decide).
+- **O xterm segue a janela**: mover o elemento nao basta. `TerminalSessionStore` chama `open()` de novo a cada
+  mudanca de hospedeiro (num terminal aberto, so troca a janela de que saem o quadro de animacao, o DPR e os
+  observadores) e `release(id)` devolve o xterm a principal ANTES de uma janela fechar. Sem a primeira, com a
+  principal minimizada a saida atrasava ~0,8 s; um xterm apontando para janela fechada derrubou o renderer.
+- **Menus abrem na janela de quem chamou**: o pedido do menu de link leva o `documento`. A trava
+  `shared/janelas/codigo-destacavel.test.ts` reprova `document.body`, `window.addEventListener` e `instanceof Node`
+  novos no codigo do terminal; elemento que passar a ser destacavel entra na lista dela.
+- **Reabertura** (`canvas/components/detached-windows-memory.ts`): o renderer lembra quem estava destacado e em que
+  modo; a posicao e o tamanho ficam em `window.aux.<id>.state`. Na partida a gaveta abre esses paineis (ate o teto
+  dela) e cada um destaca o seu quando o terminal existe. O X da janela so esquece depois de 2 s, porque sair do app
+  tambem fecha as janelas. Recarregar ou travar a principal fecha as auxiliares (`aux-windows.cjs`), que reabrem.
+- **Ainda nao existe**: lembrar o mosaico entre sessoes e destacar nota e painel de ferramenta (tarefas
+  seguintes). Wayland: a posicao salva nao vale (o compositor decide).

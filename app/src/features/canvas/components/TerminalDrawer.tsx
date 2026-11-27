@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useId, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowRightLeft,
   ChevronLeft,
@@ -51,6 +51,7 @@ import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
 import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
 import { detachTerminal, type DetachedTerminal, type DetachMode } from './terminal-detach'
+import { concluirReabertura, reaberturaPendente } from './detached-windows-memory'
 import { reportActionFailure } from '../services/canvas-persistence-status'
 import { drawerPaneShortcut, type DrawerLayoutChoice } from './terminal-drawer-panes'
 import {
@@ -1164,6 +1165,23 @@ function TerminalPane({
     detachedRef.current = null
     setDetachedTerminal(null)
   }
+
+  // Reabre a janela que este terminal tinha na execução anterior, quando ele já
+  // existe (um agente esperando a escolha de retomada ainda não tem xterm). O
+  // adiamento deixa o StrictMode montar e desmontar sem abrir uma janela que o
+  // descarte fecharia.
+  const reabrirLembrada = useEffectEvent(() => {
+    const modo = reaberturaPendente(sessionId)
+    if (!modo || detachedRef.current) return
+    concluirReabertura(sessionId)
+    openInWindow(modo)
+  })
+  const temTerminal = Boolean(snapshot)
+  useEffect(() => {
+    if (!temTerminal) return
+    const timer = window.setTimeout(() => reabrirLembrada(), 0)
+    return () => window.clearTimeout(timer)
+  }, [sessionId, temTerminal])
 
   // Keep the terminal fitted as the drawer width changes. Expanding also
   // returns focus to the terminal so the user can type right away — or to the

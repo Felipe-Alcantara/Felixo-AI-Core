@@ -155,6 +155,33 @@ test('attachTo: reage aos eventos de monitor e fechar a principal fecha as auxil
   assert.equal(ctx.tela.listenerCount('display-removed'), 0)
 })
 
+// Recarregada, a principal perde o script que desenhava a auxiliar: a janela velha
+// ficava aberta e vazia, e o novo `window.open` de mesmo nome a navegava de novo,
+// apagando a lembrança de que ela precisava reabrir (medido em 27/11/2026).
+test('recarregar ou travar a principal fecha as auxiliares; navegação de quadro ou de âncora não', () => {
+  const abrir = (ctx, id) => {
+    ctx.gerenciador.windowOpenHandler({ url: 'about:blank', frameName: `felixo-aux-${id}` })
+    const filha = janelaFalsa()
+    ctx.principal.webContents.emit('did-create-window', filha, { frameName: `felixo-aux-${id}` })
+    return filha
+  }
+  const ctx = montar()
+  ctx.gerenciador.attachTo(ctx.principal)
+
+  const filha = abrir(ctx, 't1')
+  ctx.principal.webContents.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false })
+  ctx.principal.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true })
+  assert.equal(filha.closed, false)
+
+  ctx.principal.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+  assert.equal(filha.closed, true)
+  assert.deepEqual(ctx.gerenciador.list(), [])
+
+  const pip = abrir(ctx, 'pip-t1')
+  ctx.principal.webContents.emit('render-process-gone', {}, { reason: 'crashed' })
+  assert.equal(pip.closed, true)
+})
+
 test('esconder a principal (bandeja) esconde as auxiliares sem fechá-las; mostrar traz de volta', () => {
   const ctx = montar()
   ctx.gerenciador.attachTo(ctx.principal)

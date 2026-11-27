@@ -1,4 +1,5 @@
 import { abrirJanelaAuxiliar, clonarEstilos } from '../../shared/janelas/multijanela'
+import { esquecerJanela, esquecerJanelaDepois, lembrarJanela } from './detached-windows-memory'
 import { attachTerminalFitLifecycle, type TerminalFitStore } from './terminal-fit-lifecycle'
 
 /**
@@ -8,7 +9,10 @@ import { attachTerminalFitLifecycle, type TerminalFitStore } from './terminal-fi
  * nela: quem desenha é o renderer da principal.
  */
 
-export type DetachStore = TerminalFitStore & { moveTo: (sessionId: string, container: HTMLElement) => boolean }
+export type DetachStore = TerminalFitStore & {
+  moveTo: (sessionId: string, container: HTMLElement) => boolean
+  release: (sessionId: string) => void
+}
 
 /** `janela`: janela comum ao lado do app. `pip`: pequena, sempre no topo, visível com o app na bandeja. */
 export type DetachMode = 'janela' | 'pip'
@@ -81,9 +85,11 @@ export function detachTerminal({
   })
 
   let finished = false
+  // O xterm sai da janela sempre, com ou sem painel esperando por ele.
   const sendHome = () => {
     const home = getHome()
     if (home) store.moveTo(sessionId, home)
+    else store.release(sessionId)
   }
   const finish = () => {
     if (finished) return false
@@ -97,9 +103,12 @@ export function detachTerminal({
   function onGone() {
     if (!finish()) return
     sendHome()
+    // Pode ser o app saindo: ver `ESPERA_PARA_ESQUECER_MS`.
+    esquecerJanelaDepois(sessionId)
     onClosed()
   }
   win.addEventListener('pagehide', onGone)
+  lembrarJanela(sessionId, modo)
 
   return {
     modo,
@@ -107,6 +116,7 @@ export function detachTerminal({
     bringBack() {
       if (!finish()) return
       sendHome()
+      esquecerJanela(sessionId)
       win.close()
     },
     rebind() {
@@ -116,6 +126,8 @@ export function detachTerminal({
     },
     discard() {
       if (!finish()) return
+      store.release(sessionId)
+      esquecerJanela(sessionId)
       win.close()
     },
   }

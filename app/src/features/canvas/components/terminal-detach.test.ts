@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ESPERA_PARA_ESQUECER_MS, janelasLembradas, reiniciarReaberturaParaTeste } from './detached-windows-memory'
+import { instalarLocalStorageEmMemoria } from '../../shared/test-support/jsdom-storage'
 import { auxIdDoTerminal, detachTerminal, type DetachStore } from './terminal-detach'
 
 /** Janela auxiliar falsa: um documento de verdade (jsdom), sem Electron. */
@@ -32,6 +34,7 @@ function fakeStore() {
     attach: vi.fn<DetachStore['attach']>(),
     fit: vi.fn<DetachStore['fit']>(),
     moveTo: vi.fn<DetachStore['moveTo']>(() => true),
+    release: vi.fn<DetachStore['release']>(),
   }
 }
 
@@ -52,6 +55,11 @@ function setup() {
 }
 
 describe('detachTerminal', () => {
+  beforeEach(() => {
+    instalarLocalStorageEmMemoria()
+    reiniciarReaberturaParaTeste()
+  })
+
   it('abre a janela do terminal, titula e encaixa o xterm no contêiner dela', () => {
     const { win, store, handle } = setup()
 
@@ -133,7 +141,7 @@ describe('detachTerminal', () => {
     expect(win.close).not.toHaveBeenCalled()
   })
 
-  it('sem encaixe do painel (já desmontado) não tenta mover, mas ainda avisa o fechamento', () => {
+  it('sem encaixe do painel (já desmontado) não tenta mover para ele, mas ainda avisa o fechamento', () => {
     const win = fakeWindow()
     const store = fakeStore()
     const onClosed = vi.fn()
@@ -143,6 +151,27 @@ describe('detachTerminal', () => {
 
     expect(store.moveTo).not.toHaveBeenCalled()
     expect(onClosed).toHaveBeenCalledTimes(1)
+  })
+
+  it('a janela fica lembrada para reabrir; trazer de volta e descartar esquecem na hora', () => {
+    for (const fechar of ['bringBack', 'discard'] as const) {
+      const { handle } = setup()
+      expect(janelasLembradas()).toEqual([{ sessionId: 'agente-1', modo: 'janela' }])
+      handle![fechar]()
+      expect(janelasLembradas()).toEqual([])
+    }
+  })
+
+  // Sair do app também dispara o `pagehide`: esquecer na hora perderia a reabertura.
+  it('o X da janela só esquece depois da espera', () => {
+    vi.useFakeTimers()
+    const { win } = setup()
+
+    win.emit('pagehide')
+    expect(janelasLembradas()).toHaveLength(1)
+    vi.advanceTimersByTime(ESPERA_PARA_ESQUECER_MS)
+    expect(janelasLembradas()).toEqual([])
+    vi.useRealTimers()
   })
 
   it('rebind refaz o encaixe na janela depois de um Reiniciar, e deixa de valer depois de fechar', () => {
@@ -165,5 +194,31 @@ describe('detachTerminal', () => {
 
     expect(win.close).toHaveBeenCalledTimes(1)
     expect(store.moveTo).not.toHaveBeenCalled()
+  })
+
+  // Um xterm que continua apontando para uma janela fechada derruba o renderer.
+  it('discard tira o xterm da janela ANTES de fechá-la', () => {
+    const { win, store, handle } = setup()
+    const ordem: string[] = []
+    store.release.mockImplementation(() => void ordem.push('release'))
+    win.close.mockImplementation(() => ordem.push('close'))
+
+    handle!.discard()
+
+    expect(store.release).toHaveBeenCalledWith('agente-1')
+    expect(ordem).toEqual(['release', 'close'])
+  })
+
+  it('sem encaixe do painel, fechar por fora ou trazer de volta ainda tira o xterm da janela', () => {
+    for (const fechar of ['x', 'botao']) {
+      const win = fakeWindow()
+      const store = fakeStore()
+      const handle = detachTerminal({ sessionId: 'a', title: 'a', store, getHome: () => null, onClosed: vi.fn(), open: () => win as unknown as Window })
+
+      if (fechar === 'x') win.emit('pagehide')
+      else handle!.bringBack()
+
+      expect(store.release).toHaveBeenCalledWith('a')
+    }
   })
 })

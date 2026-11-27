@@ -195,6 +195,12 @@ function createAuxWindowManager({ settingsRepository, screenApi, applyGuards, sh
     }
     mainWindow.on('hide', seguir('hide'))
     mainWindow.on('show', seguir('show'))
+    // Recarregada ou travada, a principal perde o script que desenha as auxiliares:
+    // elas fecham junto, e o renderer novo as reabre pela própria lembrança.
+    mainWindow.webContents.on('did-start-navigation', (details) => {
+      if (details?.isMainFrame && !details.isSameDocument) closeAll()
+    })
+    mainWindow.webContents.on('render-process-gone', closeAll)
     mainWindow.once('closed', () => {
       screenApi?.removeListener?.('display-removed', reconcileDisplays)
       screenApi?.removeListener?.('display-metrics-changed', reconcileDisplays)

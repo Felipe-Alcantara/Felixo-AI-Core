@@ -12,8 +12,9 @@ const estado = vi.hoisted(() => ({
     focus: vi.fn(),
     copy: vi.fn(async () => ''),
     scrollClaude: vi.fn(),
+    release: vi.fn(),
   },
-  snapshot: { activity: 'idle', generation: 1 } as Record<string, unknown>,
+  snapshot: { activity: 'idle', generation: 1 } as Record<string, unknown> | undefined,
   reportDrawerWidth: vi.fn(),
 }))
 
@@ -36,6 +37,7 @@ vi.mock('./TerminalArchivePanel', () => ({
 }))
 
 import { TerminalDrawer, type TerminalDrawerPane } from './TerminalDrawer'
+import { janelasLembradas, lembrarJanela, prepararReabertura, reiniciarReaberturaParaTeste } from './detached-windows-memory'
 import { presetMosaic } from './terminal-mosaic'
 import { instalarLocalStorageEmMemoria } from '../../shared/test-support/jsdom-storage'
 import { instalarShimsDeLayout } from '../../shared/test-support/jsdom-shims'
@@ -175,6 +177,57 @@ describe('TerminalDrawer (controles)', () => {
       // Só o `moveTo` de ida (para a janela): desmontou, então não há volta para um painel que já não existe.
       expect(estado.store.moveTo).toHaveBeenCalledTimes(1)
       expect(estado.store.moveTo.mock.calls[0][1].ownerDocument).toBe(janela.document)
+      // O xterm sai da janela antes de ela fechar.
+      expect(estado.store.release).toHaveBeenCalledWith('no-1')
+      expect(estado.store.release.mock.invocationCallOrder[0]).toBeLessThan(janela.close.mock.invocationCallOrder[0])
+    })
+
+    describe('reabrir a janela da execução anterior', () => {
+      const proximoQuadro = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 10))))
+      const prepararMemoria = (modo: 'janela' | 'pip') => {
+        reiniciarReaberturaParaTeste()
+        lembrarJanela('no-1', modo)
+        prepararReabertura(new Set(['no-1']))
+      }
+      afterEach(() => {
+        estado.snapshot = { activity: 'idle', generation: 1 }
+        reiniciarReaberturaParaTeste()
+      })
+
+      it('o painel destaca o terminal sozinho, no modo em que estava, uma vez só', async () => {
+        const janela = janelaFalsa()
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window)
+        prepararMemoria('pip')
+
+        montar()
+        await proximoQuadro()
+
+        expect(abrir).toHaveBeenCalledTimes(1)
+        expect(abrir).toHaveBeenCalledWith('about:blank', 'felixo-aux-pip-no-1')
+        expect(screen.getByText('Este terminal está em picture-in-picture.')).toBeTruthy()
+        expect(janelasLembradas()).toEqual([{ sessionId: 'no-1', modo: 'pip' }])
+      })
+
+      it('espera o terminal existir: agente aguardando a retomada não ganha janela vazia', async () => {
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(janelaFalsa() as unknown as Window)
+        prepararMemoria('janela')
+        estado.snapshot = undefined
+
+        montar()
+        await proximoQuadro()
+
+        expect(abrir).not.toHaveBeenCalled()
+      })
+
+      it('sem nada lembrado, nenhum painel abre janela sozinho', async () => {
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(janelaFalsa() as unknown as Window)
+        reiniciarReaberturaParaTeste()
+
+        montar()
+        await proximoQuadro()
+
+        expect(abrir).not.toHaveBeenCalled()
+      })
     })
   })
 
