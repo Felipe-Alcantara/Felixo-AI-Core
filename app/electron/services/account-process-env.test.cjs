@@ -136,7 +136,9 @@ test('conta com perfil: painel, uso ao vivo, /status e app-server nascem com o a
   const claude = store.list().find((account) => account.providerId === 'claude')
   const claudeTerminal = terminalEnv(store, claude)
   const claudeLive = await captureSpawnEnv((spawnPty) =>
-    createClaudeUsageQuery({ spawnPty })({ env: store.buildEnv(claude.id, 'claude'), timeoutMs: 50 }),
+    createClaudeUsageQuery({ runCommand: async ({ command, args, ...options }) => spawnPty(command, args, options) })({
+      env: store.buildEnv(claude.id, 'claude'),
+    }),
   )
   assertSameEnv(claudeLive, claudeTerminal, 'uso ao vivo do Claude', ['CLAUDE_CODE_SKIP_PROMPT_HISTORY'])
 

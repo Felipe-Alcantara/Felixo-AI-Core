@@ -53,20 +53,19 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       command: 'claude',
       args: ['auth', 'status', '--json'],
     },
-    // O `/status` só existe dentro de uma sessão interativa com TTY. O serviço
-    // abre uma sessão descartável e consulta cada perfil com o ambiente dele;
-    // o probe continua como fallback para quem já optou pela status line.
+    // O serviço roda `claude -p /usage` com o ambiente de cada perfil; o probe
+    // continua como fallback para quem já optou pela status line.
     liveQuery: 'claude-status',
     localProbe: 'claude-statusline',
-    // A status line local já envia atualizações pelo watcher. Não agendar o
-    // PTY do /status: ele não retornou limites nas medições reais.
+    // A status line local já envia atualizações pelo watcher: a rodada
+    // agendada fica por conta dela.
     scheduledRefresh: 'watcher',
     usage: {
       kind: 'live-query',
-      label: 'Claude Code /status (ao vivo)',
-      docsUrl: 'https://code.claude.com/docs/en/interactive-mode',
+      label: 'Claude Code /usage (ao vivo)',
+      docsUrl: 'https://code.claude.com/docs/en/costs',
       limitation:
-        'O Claude só publica o limite dentro do /status de uma sessão interativa; a consulta ao vivo desta conta não retornou um número nesta rodada.',
+        'A consulta ao /usage do Claude não retornou um número para esta conta nesta rodada.',
     },
   },
   {

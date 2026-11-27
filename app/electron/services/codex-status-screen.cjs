@@ -769,7 +769,8 @@ function parseCodexStatusScreen(output) {
 
 function loadNodePtySpawn(platformName = process.platform) {
   // Mesmo preparo do terminal do Canvas: o tarball do node-pty pode trazer o
-  // spawn-helper do macOS sem bit executável (ver claude-usage-query.cjs).
+  // spawn-helper do macOS sem bit executável, e aí o `posix_spawnp` falha antes
+  // de a CLI emitir qualquer saída.
   if (platformName === 'darwin') {
     const helperState = ensureNodePtySpawnHelperExecutable({ platformName })
     if (!helperState.ok) {

@@ -44,8 +44,8 @@ o app leu — uma fonte que só é atualizada durante a sessão continua exibind
 Onde a CLI não oferece cota consultável sem interação, o painel diz isso por
 extenso, em vez de mostrar zero. Na atualização manual, as fontes ao vivo são
 consultadas por conta/perfil: o Codex lê o app-server autenticado e a tela do
-`/status` (ver abaixo), o Claude abre uma sessão PTY descartável e executa o
-`/status`, e o Openia chama seu `statusline`. Por isso o painel não copia o
+`/status` (ver abaixo), o Claude roda `claude -p /usage` (respondido pela
+própria CLI, sem pedido ao modelo), e o Openia chama seu `statusline`. Por isso o painel não copia o
 limite do login do sistema para outra linha. Ao
 abrir, o painel mostra o que já tem e só consulta de novo se a última coleta
 completa tiver 5 minutos ou mais (ou se ainda não houve coleta desde que o app
@@ -57,7 +57,7 @@ principal inicia rodadas a cada ~30 segundos no modo Normal e a cada 5 minutos
 no Modo Performance. Ele consulta até quatro contas ao mesmo tempo, priorizando
 sessões abertas e leituras mais antigas. Nessa cadência, o Codex consulta só os
 limites pelo app-server e o Openia executa `statusline`; o Claude recebe atualizações da status line local
-pelo watcher, sem abrir PTY, e o Gemini fica fora por depender de uma sessão
+pelo watcher, sem consulta agendada, e o Gemini fica fora por depender de uma sessão
 interativa. Assim, a atualização automática evita as fontes lentas ou sem quota
 consultável fora da sessão. Em ociosidade prolongada (5 minutos) ou usando
 bateria, a frequência cai para no máximo uma consulta por conta a cada 5 ou 2
@@ -151,12 +151,12 @@ reabrir o painel. A barra fica na tela enquanto houver filtro ligado, mesmo que
 o número de contas caia abaixo de 6, para o filtro nunca esconder uma conta em
 silêncio.
 
-No Claude Code, cada linha também traz **Dados completos do /status**: versão,
-sessão, peer, pasta, método de login, organização, e-mail, modelo, fontes de
-configuração, custo, duração, alterações, uso por modelo, janelas, resets,
-promoção, explicação/atribuição das últimas 24 horas e créditos de uso. Esses
-campos são extraídos e redigidos antes de serem armazenados; a saída bruta do
-terminal nunca vai para o renderer.
+No Claude Code, cada linha também traz **Dados completos do /status**: as janelas
+com o reset e o texto que o `/usage` publicou (inclusive a semana por modelo e o que
+pesou no uso nas últimas 24 horas e 7 dias), redigido antes de ser armazenado. A
+janela de 5 h aparece só quando a CLI a informa. E-mail, organização, modelo e versão
+não vêm mais: eles saíam da tela interativa do `/status`, que o app deixou de abrir
+porque ela pergunta se a pasta é confiável antes de aceitar o comando.
 
 No Codex, o `/status` completo de cada conta vem de duas leituras feitas ao
 mesmo tempo, com o login daquela conta:
@@ -191,7 +191,7 @@ O que cada CLI publica hoje:
 | CLI | Fonte | O que aparece |
 |-----|-------|---------------|
 | Codex | app-server ao vivo (limites, conta, configuração, modelos e histórico de tokens) e a tela do `/status`, por conta/perfil; rollout local só como fallback | janelas de 5 h e semanal, reserva semanal por modelo, resets, créditos, plano, configuração, modelos, histórico de tokens, avisos de bloqueio e o texto do `/status` |
-| Claude Code | `/status` interativo ao vivo por conta/perfil | Status + Usage completos, janelas de 5 h e semanal, resets, estatísticas e atribuição |
+| Claude Code | `claude -p /usage` ao vivo por conta/perfil | janelas de 5 h (quando a CLI informa) e semanal, resets e o texto do `/usage` |
 | Openia | `openia statusline` ao vivo (créditos da conta no OpenRouter) | usado, restante e total em US$ |
 | Gemini | — | sem endpoint não interativo seguro: a quota só existe no `/stats model` interativo e fica explicitamente indisponível, nunca 0% nem barra. Desde 18/06/2026 a Gemini CLI deixou de atender contas individuais (gratuita, AI Pro e Ultra) e a Antigravity CLI a substituiu, segundo o anúncio da Google. O app não abre terminal escondido para extrair esse dado |
 | Antigravity | `agy models` (só o login) | a CLI 1.5.8 não publica quota por comando não interativo: o painel confere o login, que leva de 3 a 5 s e não gasta cota, e a amostra fica indisponível com o motivo |
@@ -248,7 +248,7 @@ como fallback local: pelo botão do painel, o app registra um script no arquivo
 de configuração do Claude Code, preserva uma status line que já exista (recusa
 sobrescrever), continua imprimindo uma linha útil, e desligar a coleta devolve
 a configuração ao estado anterior. A consulta principal do painel não depende
-dessa instalação: ela usa o `/status` ao vivo.
+dessa instalação: ela usa o `/usage` ao vivo.
 
 ## Conta por terminal
 

@@ -329,7 +329,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
       {
-        what: 'O refresh manual abre um PTY de /status por conta. Medido em 15/10/2026 com 9 contas Codex e o Claude: a consulta do Codex por conta caiu de 25,2 s para ~11 s (p50) com a leitura do /status sem moldura (Codex 0.159+), mas a coleta inteira segue em ~31 a 36 s porque o /status do Claude 2.1.300 nunca devolve os limites (0 de 47): falha em 4 a 8 s ou estoura os 30 s (15 de 47). O scheduler não usa esses PTYs: atualiza Codex pelo app-server, Openia por statusline e recebe a statusline local do Claude pelo watcher.',
+        what: 'O refresh manual abre um PTY de /status por conta Codex e roda claude -p /usage por conta Claude. Medido em 15/10/2026 com 9 contas Codex: a consulta por conta caiu de 25,2 s para ~11 s (p50) com a leitura do /status sem moldura (Codex 0.159+). Medido em 27/11/2026 com o Claude 2.1.332: cada conta responde em 1 a 2 s; a consulta anterior, pela tela do /status, falhava sempre na pergunta de confiança da pasta temporária. O scheduler não usa essas consultas: atualiza Codex pelo app-server, Openia por statusline e recebe a statusline local do Claude pelo watcher.',
         risk: 'médio',
         task: '3fa91f95-497e-81fc-b87c-e65a5bdce2a5',
       },

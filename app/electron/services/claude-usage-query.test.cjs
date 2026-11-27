@@ -3,205 +3,143 @@ require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário 
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const platform = require('../core/platform/index.cjs')
 const {
+  CLAUDE_USAGE_ARGS,
   createClaudeUsageQuery,
-  parseClaudeReset,
-  parseClaudeStatusDetails,
-  parseClaudeUsageOutput,
-  renderClaudeTerminalOutput,
+  parseClaudeUsageText,
 } = require('./claude-usage-query.cjs')
 
-const NOW = Date.parse('2026-08-30T19:00:00.000Z')
+const NOW = Date.parse('2026-11-27T12:00:00.000Z')
 
-const STATUS_OUTPUT = `
-Status
-Version: 2.1.251
-Session name: /rename to add a name
-Session ID: session-123
-Session kind: interactive
-Peer address: uds:/run/user/1000/cc-socks/session-123
-cwd: /tmp/felixo-status
-Login method: Claude Pro account
-Organization: Felixo
-Email: pessoa@example.com
-Model: sonnet (claude-sonnet-5)
-Setting sources: User settings
-Config
-Usage
-Total cost: $0.0000
-Total duration (API): 1s
-Total duration (wall): 2s
-Total code changes: 3 lines added, 1 line removed
-Usage by model: sonnet 10 input, 20 output
-Current session
-12% used
-Resets 6:50pm (America/Sao_Paulo)
-Current week (all models)
-100% used
-Resets Sep 2, 2am (America/Sao_Paulo)
-+50% weekly limits promo through Aug 31 · clau.de/cc-50-promo
-What's contributing to your limits usage?
-Approximate, based on local sessions on this machine—does not include other devices or claude.ai
-Last 24h, these independent factors are affecting your usage:
-100% of your usage was at >150k context
-100% of your usage was in sessions active for 8+ hours
-Usage credits
-Off
-Stats
-`
+// Saída real do `claude -p /usage` da 2.1.332, sem os nomes de skills e plugins.
+const SEM_JANELA_DE_5H = `You are currently using your subscription to power your Claude Code usage
 
-test('parseClaudeUsageOutput conserva limites e todos os detalhes seguros do /status', () => {
-  const result = parseClaudeUsageOutput(STATUS_OUTPUT, { now: () => NOW })
+Current week (all models): 46% used · resets Dec 2, 2am (America/Sao_Paulo)
+Current week (Fable): 18% used · resets Dec 2, 2am (America/Sao_Paulo)
 
-  assert.deepEqual(
-    result.metrics.map(({ key, used, resetAt }) => ({ key, used, resetAt })),
-    [
-      {
-        key: 'rate_limits.five_hour',
-        used: 12,
-        resetAt: '2026-08-30T21:50:00.000Z',
-      },
-      {
-        key: 'rate_limits.seven_day',
-        used: 100,
-        resetAt: '2026-09-02T05:00:00.000Z',
-      },
-    ],
-  )
-  assert.equal(result.details.status.email, 'pessoa@example.com')
-  assert.equal(result.details.status.model, 'sonnet (claude-sonnet-5)')
-  assert.equal(result.details.usage.sessionStats.totalCost, '$0.0000')
-  assert.equal(result.details.usage.currentWeek.used, 100)
-  assert.equal(
-    result.details.usage.currentWeek.resetAt,
-    '2026-09-02T05:00:00.000Z',
-  )
-  assert.match(result.details.usage.promotion, /50% weekly limits promo/)
-  assert.equal(result.details.usage.usageCredits.includes('Stats'), false)
-  assert.equal(result.details.usage.usageCredits.includes('Esc to cancel'), false)
-  assert.equal(result.details.usage.activity.length, 2)
+What's contributing to your usage?
+Approximate · sessions on this machine only · shares overlap
+
+Last 24h · 674 requests · 9 sessions
+  90%  Start fresh when you switch tasks · run /clear`
+
+const SESSAO_ZERADA = `You are currently using your subscription to power your Claude Code usage
+
+Current session: 0% used
+Current week (all models): 0% used · resets Dec 2, 11am (America/Sao_Paulo)`
+
+// O que a CLI responde numa conta sem login: só os contadores da própria chamada.
+const SEM_LOGIN = `Total cost:            $0.0000
+Total duration (API):  0s
+Usage:                 0 input, 0 output, 0 cache read, 0 cache write`
+
+const resposta = (result, extra = {}) => ({
+  ok: true,
+  stdout: `${JSON.stringify({ type: 'result', is_error: false, num_turns: 0, result, ...extra })}\n`,
+  stderr: '',
 })
 
-test('parseClaudeReset respeita o fuso publicado pela CLI', () => {
-  assert.equal(
-    parseClaudeReset('Sep 2, 2am', NOW, 'America/Sao_Paulo'),
-    '2026-09-02T05:00:00.000Z',
-  )
-  assert.equal(
-    parseClaudeReset('6:50pm', NOW, 'America/Sao_Paulo'),
-    '2026-08-30T21:50:00.000Z',
-  )
-})
+const consultar = (retorno, opcoes) =>
+  createClaudeUsageQuery({ now: () => NOW, runCommand: async () => retorno })(opcoes)
 
-test('mantém linhas novas do quadro Status sem depender do parser de rótulos', () => {
-  const details = parseClaudeStatusDetails(
-    [
-      'Settings  Status   Config   Usage   Stats',
-      'Version: 2.1.251',
-      'New status field: value from this CLI version',
-      'Esc to cancel',
-      'Config',
-    ].join('\n'),
-    { currentSession: null, currentWeek: null, now: () => NOW },
-  )
-
-  assert.deepEqual(details.status.lines, [
-    'Version: 2.1.251',
-    'New status field: value from this CLI version',
-    'Config',
-  ])
-})
-
-test('renderiza cursor ANSI antes de interpretar os campos do Claude', () => {
-  const output = [
-    '\u001b[2J\u001b[H',
-    'Settings',
-    '\u001b[14GStatus',
-    '\u001b[23GConfig',
-    '\u001b[32GUsage',
-    '\u001b[40GStats',
-    '\r\u001b[1B',
-    '\u001b[3CVersion:',
-    '\u001b[22G2.1.251',
-    '\r\u001b[1B',
-    '\u001b[3CSession',
-    '\u001b[12GID:',
-    '\u001b[22Gsession-123',
-  ].join('')
-
-  const rendered = renderClaudeTerminalOutput(output)
-
-  assert.match(rendered, /Version:\s+2\.1\.251/)
-  assert.match(rendered, /Session\s+ID:\s+session-123/)
-})
-
-test('consulta Claude em PTY envia somente /status e devolve o perfil isolado', async () => {
-  const writes = []
-  const spawnOptions = []
-  const dataListeners = []
-  const exitListeners = []
-  const pty = {
-    write(value) {
-      writes.push(value)
-    },
-    kill() {},
-    onData(listener) {
-      dataListeners.push(listener)
-    },
-    onExit(listener) {
-      exitListeners.push(listener)
-    },
-  }
-
-  const query = createClaudeUsageQuery({
-    now: () => NOW,
-    platform,
-    spawnPty: (_command, _args, options) => {
-      spawnOptions.push(options)
-      setImmediate(() => {
-        for (const listener of dataListeners) {
-          listener(`❯\nSettings Status Config Usage Stats\n${STATUS_OUTPUT}`)
-        }
-      })
-      return pty
-    },
-  })
-
-  const result = await query({
-    env: { CLAUDE_CONFIG_DIR: '/tmp/claude-profile' },
-    cwd: '/tmp',
-    timeoutMs: 2_000,
-    startupFallbackMs: 1,
-    navigationDelayMs: 1,
-    resultSettleMs: 20,
-  })
+test('só a janela semanal: a coleta vale e não inventa a de 5 horas', async () => {
+  const result = await consultar(resposta(SEM_JANELA_DE_5H))
 
   assert.equal(result.ok, true)
-  assert.equal(result.metrics[1].used, 100)
-  assert.equal(result.details.status.email, 'pessoa@example.com')
-  assert.equal(spawnOptions[0].env.CLAUDE_CONFIG_DIR, '/tmp/claude-profile')
-  assert.equal(spawnOptions[0].env.CLAUDE_CODE_SKIP_PROMPT_HISTORY, '1')
-  assert.equal(writes[0], '/status\r')
-  assert.ok(writes.filter((value) => value === '\u001b[C').length >= 2)
-  assert.equal(exitListeners.length, 1)
+  assert.deepEqual(result.metrics, [{
+    key: 'rate_limits.seven_day',
+    label: 'Janela de 7 dias',
+    used: 46,
+    limit: 100,
+    remaining: 54,
+    unit: '%',
+    precision: 'percentage',
+    resetAt: '2026-12-02T05:00:00.000Z',
+  }])
+  assert.equal(result.details.usage.currentSession, undefined)
+  assert.equal(result.details.usage.currentWeek.resetText, 'resets Dec 2, 2am (America/Sao_Paulo)')
+  assert.ok(result.details.usage.lines.includes('Current week (Fable): 18% used · resets Dec 2, 2am (America/Sao_Paulo)'))
+  assert.equal(result.measuredAt, '2026-11-27T12:00:00.000Z')
 })
 
-test('cancelar a consulta (teto da rodada ou Reconectar) encerra o PTY na hora e resolve com falha', async () => {
-  let killed = 0
-  const pty = {
-    write() {},
-    kill() { killed += 1 },
-    onData() {},
-    onExit() {},
+test('janela de 5 horas sem uso vem sem reset e não herda o da semana', () => {
+  const { metrics } = parseClaudeUsageText(SESSAO_ZERADA, { now: () => NOW })
+
+  assert.deepEqual(
+    metrics.map(({ key, used, resetAt }) => ({ key, used, resetAt })),
+    [
+      { key: 'rate_limits.five_hour', used: 0, resetAt: null },
+      { key: 'rate_limits.seven_day', used: 0, resetAt: '2026-12-02T14:00:00.000Z' },
+    ],
+  )
+})
+
+test('reset só com horário é lido na janela de 5 horas', () => {
+  const { metrics } = parseClaudeUsageText(
+    'Current session: 12,5% used · resets 6:50pm (America/Sao_Paulo)',
+    { now: () => NOW },
+  )
+
+  assert.equal(metrics[0].used, 12.5)
+  assert.equal(metrics[0].resetAt, '2026-11-27T21:50:00.000Z')
+})
+
+test('conta sem limites, erro da CLI, resposta do modelo e saída ilegível são falha', async () => {
+  const casos = [
+    [resposta(SEM_LOGIN), /não informou os limites/],
+    [resposta(SESSAO_ZERADA, { is_error: true }), /não informou os limites/],
+    [{ ...resposta(SESSAO_ZERADA), ok: false }, /não informou os limites/],
+    [resposta(SESSAO_ZERADA, { num_turns: 1 }), /sem abrir uma conversa/],
+    [{ ok: false, stdout: '', stderr: "error: unknown option '--safe-mode'" }, /não respondeu/],
+    [{ ok: false, timedOut: true, stdout: '' }, /tempo limite/],
+    [{ ok: false, cancelled: true, stdout: '' }, /cancelada/],
+  ]
+
+  for (const [retorno, mensagem] of casos) {
+    const result = await consultar(retorno)
+    assert.equal(result.ok, false)
+    assert.deepEqual(result.metrics, [])
+    assert.match(result.message, mensagem)
   }
-  // Um Claude que abriu e nunca mostra o prompt: o caso do monitor travado.
-  const query = createClaudeUsageQuery({ now: () => NOW, platform, spawnPty: () => pty })
-  const controller = new AbortController()
-  const pending = query({ cwd: '/tmp', timeoutMs: 60_000, startupFallbackMs: 60_000, signal: controller.signal })
-  controller.abort()
-  const result = await pending
-  assert.equal(result.ok, false)
-  assert.match(result.message, /cancelada/)
-  assert.equal(killed, 1)
+})
+
+test('aviso antes do JSON não atrapalha e segredo não sai nos detalhes', async () => {
+  const retorno = resposta(`${SESSAO_ZERADA}\nAPI key: sk-ant-abcdefgh12345678`)
+  retorno.stdout = `Aviso da CLI\n${retorno.stdout}`
+
+  const result = await consultar(retorno)
+
+  assert.equal(result.ok, true)
+  assert.doesNotMatch(JSON.stringify(result), /abcdefgh12345678/)
+})
+
+// Com `"verbose": true` nas configurações da pessoa, a CLI devolve a lista de eventos.
+test('lê a resposta quando a CLI devolve a lista de eventos', async () => {
+  const eventos = [
+    { type: 'system', subtype: 'init', cwd: '/tmp' },
+    { type: 'result', is_error: false, num_turns: 0, result: SESSAO_ZERADA },
+  ]
+  const result = await consultar({ ok: true, stdout: `${JSON.stringify(eventos)}\n`, stderr: '' })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.metrics.length, 2)
+})
+
+test('chama a CLI com o perfil da conta, sem histórico, e repassa o cancelamento', async () => {
+  const chamadas = []
+  const { signal } = new AbortController()
+  await createClaudeUsageQuery({
+    now: () => NOW,
+    runCommand: async (chamada) => {
+      chamadas.push(chamada)
+      return resposta(SESSAO_ZERADA)
+    },
+  })({ env: { CLAUDE_CONFIG_DIR: '/tmp/claude-profile' }, timeoutMs: 1234, signal })
+
+  assert.equal(chamadas[0].command, 'claude')
+  assert.deepEqual(chamadas[0].args, [...CLAUDE_USAGE_ARGS])
+  assert.equal(chamadas[0].env.CLAUDE_CONFIG_DIR, '/tmp/claude-profile')
+  assert.equal(chamadas[0].env.CLAUDE_CODE_SKIP_PROMPT_HISTORY, '1')
+  assert.equal(chamadas[0].timeoutMs, 1234)
+  assert.equal(chamadas[0].signal, signal)
 })

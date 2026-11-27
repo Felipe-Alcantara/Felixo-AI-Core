@@ -631,13 +631,13 @@ contas, o que cada camada executa:
 | Camada | Exemplo | Processo | CLI do fornecedor | Rede e credencial | Quando roda |
 | --- | --- | --- | --- | --- | --- |
 | Unitário com comando falso | `agent-usage-service.test.cjs`, `agent-usage-service-load.test.cjs`, `agent-usage-secrets.test.cjs` | nenhum (`runCommand` e consultas injetados) | não | não | `npm test`, CI |
-| Nativo com fixture | `claude-usage-query.integration.test.cjs` | `node-pty` de verdade (ConPTY, shell de login, launch direto) rodando um script chamado `claude` | **não**: o script só simula prompt, quadro Status/Usage e teclas | não | `npm run test:native`, CI nos 4 SOs |
+| Nativo com fixture | `claude-usage-query.integration.test.cjs` | processo de verdade (no Windows, o `.cmd` achado pelo PATH) rodando um script chamado `claude` | **não**: o script só imita a pergunta de confiança e a resposta de `-p /usage` | não | `npm run test:native`, CI nos 4 SOs |
 | Bancada com processos | `npm run benchmark:agent-usage -- --mode=spawn` | CLI falsa em Node, lançada pelo `runBufferedCommand` do app | não | não | sob demanda; `:check` reprova acima dos tetos |
-| Smoke real controlado | `npm run benchmark:agent-usage -- --mode=real` | `claude auth status --json` e `codex login status` de verdade, em perfil temporário **vazio** | **sim** | nenhuma credencial: sem login, a consulta ao vivo (PTY) não roda | só com `FELIXO_USAGE_REAL_CLI=1`; recusa com `CI` definido, com mais de 12 contas ou com menos de 1 GB de RAM livre |
+| Smoke real controlado | `npm run benchmark:agent-usage -- --mode=real` | `claude auth status --json` e `codex login status` de verdade, em perfil temporário **vazio** | **sim** | nenhuma credencial: sem login, a consulta ao vivo não roda | só com `FELIXO_USAGE_REAL_CLI=1`; recusa com `CI` definido, com mais de 12 contas ou com menos de 1 GB de RAM livre |
 
 Nenhum teste automático fala com a CLI real do fornecedor logada: isso exigiria credencial
-pessoal e gastaria cota. A consulta ao vivo de uma conta logada (o PTY do `/status`) só é
-coberta pela fixture; o tempo dela em conta real segue sem medição.
+pessoal e gastaria cota. A consulta ao vivo de uma conta logada (`claude -p /usage`) só é
+coberta pela fixture; em 27/11/2026, à mão, ela respondeu em ~2 s na 2.1.332.
 
 ### Typecheck e cache incremental
 
