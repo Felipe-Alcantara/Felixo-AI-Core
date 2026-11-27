@@ -582,6 +582,19 @@ npm run test:frontend
 runner Node portável; as integrações `*.integration.test.cjs` são executadas
 por `npm run test:native`.
 
+Nenhum teste fica preso em silêncio no `npm test`. Cada arquivo tem 5 minutos
+(`scripts/test-support/prazo-por-arquivo.cjs`): estourado o prazo, a saída diz
+`[test] prazo de 300 s estourado em <arquivo>` e os testes em andamento (ou que
+algo ficou ligado depois deles), o processo do arquivo e os descendentes são
+encerrados e a suíte falha. A suíte inteira tem 12 minutos. Para mudar numa
+execução: `FELIXO_TEST_FILE_TIMEOUT_MS` e `FELIXO_TEST_TOTAL_TIMEOUT_MS`. Não vale
+para o `test:native` nem para um `node --test` chamado direto.
+
+Antes de checar algo assíncrono, espere a condição com
+`scripts/test-support/esperar-ate.cjs`, não um tempo fixo: numa máquina carregada o
+tempo acaba antes do trabalho. Espera fixa só para provar que algo **não**
+aconteceu.
+
 O runner roda a suíte com `TEMP`/`TMP`/`TMPDIR` apontando para uma pasta própria
 (`felixo-testes-<pid>-…`, em `scripts/test-support/temporario-dos-testes.cjs`) e a
 apaga no fim, para o `npm test` não deixar `felixo-*` no temporário do sistema.
