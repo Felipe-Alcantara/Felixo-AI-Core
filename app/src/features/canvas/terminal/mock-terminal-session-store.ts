@@ -98,6 +98,12 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
     return true
   }
 
+  hostOf(): HTMLElement | null {
+    return null
+  }
+
+  release(): void {}
+
   attach(id: string, container: HTMLElement): void {
     const session = this.sessions.get(id)
     if (!session) {

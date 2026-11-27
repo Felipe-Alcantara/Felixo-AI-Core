@@ -32,6 +32,8 @@ export type LinkChooserRequest = {
   webpageProfileName?: string
   /** Para onde o foco volta quando o menu fecha sem abrir um bloco novo. */
   returnFocus?: FocusReturn | null
+  /** Janela onde o link está, quando não é a principal (terminal destacado). */
+  documento?: Document
 }
 
 export type LinkChooserState = {

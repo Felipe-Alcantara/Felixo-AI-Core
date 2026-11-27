@@ -52,6 +52,9 @@ const COPIED_NOTICE_MS = 1400
 
 type Point = { left: number; top: number }
 
+/** A janela do pedido, se ainda estiver aberta; senão a principal. */
+const documentoVivo = (documento?: Document): Document => (documento?.defaultView ? documento : document)
+
 /**
  * O menu "para onde abrir este link", o mesmo para o terminal, o Markdown e o
  * bloco Página Web. Montado uma vez no `App`, desenha o pedido que estiver no
@@ -64,21 +67,22 @@ type Point = { left: number; top: number }
  */
 export function LinkChooserHost() {
   const { request, version } = useSyncExternalStore(subscribeLinkChooser, getLinkChooserState)
-  const [copiedAt, setCopiedAt] = useState<Point | null>(null)
+  // Os avisos que sobrevivem ao menu saem na mesma janela em que ele estava.
+  const [copiedAt, setCopiedAt] = useState<(Point & { onde?: Document }) | null>(null)
   // Uma segunda cópia dentro do aviso não muda o texto da região `status`, e
   // o leitor de tela não anuncia de novo. A contagem troca o nó do aviso a
   // cada cópia, e nó novo é anunciado.
   const [copies, setCopies] = useState(0)
   // A área de transferência recusou: "Link copiado" não pode aparecer; este aviso diz o motivo.
-  const [copyFailure, setCopyFailure] = useState<string | null>(null)
-  const onCopyFailed = useCallback((message: string) => setCopyFailure(message), [])
+  const [copyFailure, setCopyFailure] = useState<{ message: string; onde?: Document } | null>(null)
+  const onCopyFailed = useCallback((message: string, onde?: Document) => setCopyFailure({ message, onde }), [])
   useEffect(() => {
     if (!copyFailure) return
     const timer = window.setTimeout(() => setCopyFailure(null), 4000)
     return () => window.clearTimeout(timer)
   }, [copyFailure])
-  const onCopied = useCallback((at: Point) => {
-    setCopiedAt(at)
+  const onCopied = useCallback((at: Point, onde?: Document) => {
+    setCopiedAt({ ...at, onde })
     setCopies((count) => count + 1)
   }, [])
 
@@ -107,18 +111,18 @@ export function LinkChooserHost() {
       {request &&
         createPortal(
           <LinkChooserMenu key={version} request={request} onCopied={onCopied} onCopyFailed={onCopyFailed} />,
-          document.body,
+          documentoVivo(request.documento).body,
         )}
       {copiedAt &&
         createPortal(
           <div
             aria-hidden
             className="pointer-events-none fixed z-70 rounded-md border border-white/10 bg-(--f-surface-panel) px-2 py-1 text-xs text-(--f-core-white-soft) shadow-xl"
-            style={copiedAt}
+            style={{ left: copiedAt.left, top: copiedAt.top }}
           >
             Link copiado
           </div>,
-          document.body,
+          documentoVivo(copiedAt.onde).body,
         )}
       {failure &&
         createPortal(
@@ -137,9 +141,9 @@ export function LinkChooserHost() {
             role="alert"
             className="pointer-events-none fixed bottom-24 left-1/2 z-70 -translate-x-1/2 rounded-md border border-white/10 bg-(--f-surface-panel) px-2 py-1 text-xs text-theme-error shadow-xl"
           >
-            {copyFailure}
+            {copyFailure.message}
           </div>,
-          document.body,
+          documentoVivo(copyFailure.onde).body,
         )}
       <div role="status" aria-live="polite" className="sr-only">
         {copiedAt && <span key={copies}>Link copiado</span>}
@@ -246,8 +250,8 @@ function LinkOpenFailureAlert({ notice, onClose, onCopied, onCopyFailed }: Failu
 
 type MenuProps = {
   request: LinkChooserRequest
-  onCopied: (at: Point) => void
-  onCopyFailed: (message: string) => void
+  onCopied: (at: Point, onde?: Document) => void
+  onCopyFailed: (message: string, onde?: Document) => void
 }
 
 function LinkChooserMenu({ request, onCopied, onCopyFailed }: MenuProps) {
@@ -271,6 +275,10 @@ function LinkChooserMenu({ request, onCopied, onCopyFailed }: MenuProps) {
   const [position, setPosition] = useState<Point | null>(null)
   const descriptionId = useId()
 
+  // Menu, medidas e escutas são os da janela onde o link está.
+  const doc = documentoVivo(request.documento)
+  const janela = doc.defaultView ?? window
+
   // Mede o menu já desenhado (fora da tela) e só então o põe no lugar: a
   // altura depende do destino, que pode ocupar de uma a várias linhas.
   useLayoutEffect(() => {
@@ -280,17 +288,17 @@ function LinkChooserMenu({ request, onCopied, onCopyFailed }: MenuProps) {
       placeLinkChooser(
         request.anchor,
         { width: rect.width, height: rect.height },
-        { width: window.innerWidth, height: window.innerHeight },
+        { width: janela.innerWidth, height: janela.innerHeight },
       ),
     )
-  }, [request.anchor])
+  }, [request.anchor, janela])
 
   useEffect(() => {
     // Ao abrir, um quadro depois: o gesto que abriu o menu (o `mouseup` do
     // xterm, o clique no link) ainda pode devolver o foco a quem foi clicado.
-    const frame = window.requestAnimationFrame(() => itemRefs.current[0]?.focus())
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
+    const frame = janela.requestAnimationFrame(() => itemRefs.current[0]?.focus())
+    return () => janela.cancelAnimationFrame(frame)
+  }, [janela])
 
   /** Setas, Home e End: o foco anda na hora da tecla, sem esperar um quadro. */
   const moveTo = (index: number) => {
@@ -302,16 +310,17 @@ function LinkChooserMenu({ request, onCopied, onCopyFailed }: MenuProps) {
   /** Fecha sem escolha; `restoresFocusOnDismiss` diz quando o foco volta a quem abriu. */
   const dismiss = useCallback(
     (cause: LinkChooserDismissCause) => {
-      const focusWasInMenu = Boolean(containerRef.current?.contains(document.activeElement))
+      const focusWasInMenu = Boolean(containerRef.current?.contains(doc.activeElement))
       closeLinkChooser()
       if (restoresFocusOnDismiss(cause, focusWasInMenu)) restoreFocus(returnFocus)
     },
-    [returnFocus],
+    [returnFocus, doc],
   )
 
   useEffect(() => {
+    // Nó de outra janela não passa em `instanceof Node`: vale o `nodeType`.
     const isOutside = (target: EventTarget | null) =>
-      !(target instanceof Node && containerRef.current?.contains(target))
+      !((target as Node | null)?.nodeType && containerRef.current?.contains(target as Node))
     const onPointerDown = (event: PointerEvent) => {
       if (isOutside(event.target)) dismiss('pointer-outside')
     }
@@ -324,17 +333,17 @@ function LinkChooserMenu({ request, onCopied, onCopyFailed }: MenuProps) {
     // Clicar dentro de uma Página Web não chega a este documento: o foco sai
     // da janela para a página, e é isso que fecha o menu.
     const onBlur = () => dismiss('window-blur')
-    document.addEventListener('pointerdown', onPointerDown, true)
-    document.addEventListener('wheel', onWheel, { capture: true, passive: true })
-    window.addEventListener('resize', onResize)
-    window.addEventListener('blur', onBlur)
+    doc.addEventListener('pointerdown', onPointerDown, true)
+    doc.addEventListener('wheel', onWheel, { capture: true, passive: true })
+    janela.addEventListener('resize', onResize)
+    janela.addEventListener('blur', onBlur)
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      document.removeEventListener('wheel', onWheel, { capture: true })
-      window.removeEventListener('resize', onResize)
-      window.removeEventListener('blur', onBlur)
+      doc.removeEventListener('pointerdown', onPointerDown, true)
+      doc.removeEventListener('wheel', onWheel, { capture: true })
+      janela.removeEventListener('resize', onResize)
+      janela.removeEventListener('blur', onBlur)
     }
-  }, [dismiss])
+  }, [dismiss, doc, janela])
 
   const choose = (choice: LinkChoice) => {
     let opened: OpenedWebpage | undefined
@@ -352,8 +361,8 @@ function LinkChooserMenu({ request, onCopied, onCopyFailed }: MenuProps) {
       copy: (text) => {
         const at = position ?? { left: request.anchor.x, top: request.anchor.y }
         void copiarTexto(text).then((copy) => {
-          if (copy.ok) onCopied(at)
-          else onCopyFailed(copy.message)
+          if (copy.ok) onCopied(at, doc)
+          else onCopyFailed(copy.message, doc)
         })
       },
     })

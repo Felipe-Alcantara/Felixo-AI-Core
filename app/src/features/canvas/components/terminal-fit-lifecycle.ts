@@ -14,6 +14,8 @@
  * sobre cleanup, aplicados a este ponto específico.
  */
 
+import { janelaDe } from '../../shared/janelas/multijanela'
+
 export type TerminalFitStore = {
   attach: (sessionId: string, container: HTMLElement) => void
   fit: (sessionId: string) => void
@@ -34,12 +36,13 @@ export function attachTerminalFitLifecycle(
   container: HTMLElement,
   store: TerminalFitStore,
   sessionId: string,
-  {
-    requestAnimationFrame: raf = window.requestAnimationFrame.bind(window),
-    cancelAnimationFrame: cancelRaf = window.cancelAnimationFrame.bind(window),
-    ResizeObserverImpl = ResizeObserver,
-  }: TerminalFitLifecycleDeps = {},
+  deps: TerminalFitLifecycleDeps = {},
 ): () => void {
+  // Quadro e observador são os da janela onde o container está, não os da principal.
+  const janela = () => janelaDe(container) as Window & typeof globalThis
+  const raf = deps.requestAnimationFrame ?? ((callback: FrameRequestCallback) => janela().requestAnimationFrame(callback))
+  const cancelRaf = deps.cancelAnimationFrame ?? ((handle: number) => janela().cancelAnimationFrame(handle))
+  const ResizeObserverImpl = deps.ResizeObserverImpl ?? janela().ResizeObserver ?? ResizeObserver
   store.attach(sessionId, container)
   store.fit(sessionId)
 

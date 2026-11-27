@@ -140,6 +140,10 @@ export type TerminalSessionStoreApi = {
   attach: (id: string, container: HTMLElement) => void
   /** Muda o xterm vivo de hospedeiro (de janela, inclusive) sem reiniciar o PTY. */
   moveTo: (id: string, container: HTMLElement) => boolean
+  /** Quem hospeda o xterm vivo da sessão agora, ou null. Cada xterm tem um hospedeiro por vez. */
+  hostOf: (id: string) => HTMLElement | null
+  /** Tira o xterm de uma janela que vai fechar, sem encaixe de destino. */
+  release: (id: string) => void
   handleFileDrop: (id: string, files: Iterable<File>) => void
   fit: (id: string) => void
   focus: (id: string) => void

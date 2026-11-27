@@ -1324,6 +1324,7 @@ export class TerminalSessionStore {
       session.terminal.open(container)
     } else if (session.terminal.element.parentElement !== container) {
       container.appendChild(session.terminal.element)
+      this.seguirJanela(session.terminal)
     }
 
     this.bindLinkContextMenu(session)
@@ -1353,6 +1354,29 @@ export class TerminalSessionStore {
     if (!this.sessions.has(id)) return false
     this.attach(id, container)
     return true
+  }
+
+  /**
+   * Tira o xterm de uma janela que vai fechar sem ter para onde levá-lo: ele volta
+   * ao documento principal, fora de qualquer encaixe. NUNCA feche uma janela com o
+   * xterm dentro: apontando para uma janela destruída, ele derrubou o renderer.
+   */
+  release(id: string): void {
+    const terminal = this.sessions.get(id)?.terminal
+    if (!terminal?.element || terminal.element.ownerDocument === document) return
+    document.adoptNode(terminal.element)
+    this.seguirJanela(terminal)
+  }
+
+  /**
+   * O xterm só passa a usar o relógio de animação, o monitor de DPR e os
+   * observadores de outra janela quando `open()` é chamado de novo (num terminal
+   * já aberto, só troca a janela). Sem isso o terminal destacado é desenhado pela
+   * principal: com ela minimizada, a saída atrasava ~0,8 s (27/11/2026).
+   */
+  private seguirJanela(terminal: Terminal): void {
+    const element = terminal.element
+    if (element?.ownerDocument.defaultView) terminal.open(element.parentElement ?? element)
   }
 
   private bindLinkContextMenu(session: Session): void {
@@ -1389,6 +1413,7 @@ export class TerminalSessionStore {
       anchor,
       sourceNodeId: session.id,
       returnFocus: textarea ?? null,
+      documento: session.terminal.element?.ownerDocument,
     })
   }
 

@@ -154,6 +154,15 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
     return false
   }
 
+  hostOf(id: string): HTMLElement | null {
+    return this.realStore?.hostOf(id) ?? null
+  }
+
+  release(id: string): void {
+    // Sem runtime não há xterm vivo em janela nenhuma: nada a adiar.
+    this.realStore?.release(id)
+  }
+
   handleFileDrop(id: string, files: Iterable<File>): void {
     this.runDeferred((store) => store.handleFileDrop(id, files))
   }
