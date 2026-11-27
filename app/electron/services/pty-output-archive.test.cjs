@@ -6,6 +6,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { esperarAte } = require('../../scripts/test-support/esperar-ate.cjs')
 const {
   createPtyOutputArchive: createArchive,
   exportCanvasTerminalOutputs,
@@ -62,7 +63,12 @@ test('o lote sai sozinho depois do atraso, sem flush explícito', async () => {
   const directory = tempDir()
   const archive = createPtyOutputArchive({ directory, flushDelayMs: 5, logger: silentLogger() })
   archive.append('canvas:a', 'sozinho')
-  await new Promise((resolve) => setTimeout(resolve, 60))
+  const gravado = () => {
+    const [dir] = fs.readdirSync(directory)
+    const file = dir && path.join(directory, dir, '0000000000000000.log')
+    return file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+  }
+  await esperarAte(() => gravado() === 'sozinho', 'o lote foi gravado sem flush explícito')
 
   const dirs = fs.readdirSync(directory)
   assert.equal(dirs.length, 1)

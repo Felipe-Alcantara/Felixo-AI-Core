@@ -7,6 +7,7 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 
+const { esperarAte } = require('../../scripts/test-support/esperar-ate.cjs')
 const {
   CODEX_SESSION_LABELS,
   buildCodexStatusArgs,
@@ -282,8 +283,7 @@ test('fluxo completo: espera o campo, digita, repete enquanto os limites não ch
     pty.spawn.args.some((arg) => arg.startsWith('projects={') && arg.includes(path.basename(pty.spawn.options.cwd))),
     'a pasta da sessão é a que entra como confiável',
   )
-  await new Promise((resolve) => setTimeout(resolve, 50))
-  assert.equal(fs.existsSync(pty.spawn.options.cwd), false, 'a pasta temporária é apagada quando o PTY sai')
+  await esperarAte(() => !fs.existsSync(pty.spawn.options.cwd), 'a pasta temporária é apagada quando o PTY sai')
 })
 
 /**

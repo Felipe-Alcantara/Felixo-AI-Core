@@ -6,6 +6,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { esperarAte } = require('../../scripts/test-support/esperar-ate.cjs')
 const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
 const { createAgentUsageRepository } = require('./storage/agent-usage-repository.cjs')
 const {
@@ -1380,7 +1381,9 @@ test(
     })
     try {
       const travada = service.refresh()
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      // Reconectar antes de a primeira consulta começar entregaria a ele a
+      // promessa que nunca resolve: o teste ficaria preso.
+      await esperarAte(() => chamadas === 1, 'a primeira consulta começou')
       const dashboard = await service.reconnect()
       assert.equal(dashboard.ok, true)
       assert.equal(chamadas, 2)

@@ -1,6 +1,7 @@
 require('../../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { esperarAte } = require('../../../scripts/test-support/esperar-ate.cjs')
 const {
   appendOutput,
   consumeOutput,
@@ -292,7 +293,7 @@ test('orchestration IPC bridge fires guard early when only text arrives within t
     }),
   })
 
-  await new Promise((resolve) => setTimeout(resolve, 80))
+  await esperarAte(() => aborted.length > 0 && invokeCalls.length > 0, 'a guarda de texto livre disparou')
 
   assert.deepEqual(aborted, ['session-orchestrator-1'])
   assert.equal(invokeCalls.length, 1)

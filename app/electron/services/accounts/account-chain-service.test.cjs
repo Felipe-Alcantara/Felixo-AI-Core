@@ -7,6 +7,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+const { esperarAte } = require('../../../scripts/test-support/esperar-ate.cjs')
 const { createStorageDatabase } = require('../storage/sqlite-database.cjs')
 const { createAccountChainRepository } = require('../storage/account-chain-repository.cjs')
 const { createAccountChainService, normalizeDetection } = require('./account-chain-service.cjs')
@@ -1142,7 +1143,7 @@ test('varredor de prazo vence propostas pelo relógio do serviço e para quando 
     env.advance(31 * MINUTE)
     const stop = env.service.startExpirySweeper({ intervalMs: 5 })
     try {
-      await new Promise((resolve) => setTimeout(resolve, 40))
+      await esperarAte(() => env.repository.getSwitchEvent(proposal.id).state === 'expired', 'o varredor venceu a proposta')
     } finally {
       stop()
     }

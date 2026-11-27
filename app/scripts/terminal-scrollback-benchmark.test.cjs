@@ -385,7 +385,9 @@ test('a desmontagem espera os PTYs da fase saírem antes de liberar a próxima',
   const filho = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 400)'], { stdio: 'ignore' })
   await new Promise((resolve) => filho.once('spawn', resolve))
   const inicio = Date.now()
-  const vivos = await benchmark.waitForProcessesToExit([filho.pid], { timeoutMs: 5_000, pollMs: 20 })
+  // Teto folgado: devolve assim que o processo sai, e numa máquina carregada o
+  // Node filho já passou de 5 s para subir e sair (27/11/2026).
+  const vivos = await benchmark.waitForProcessesToExit([filho.pid], { timeoutMs: 60_000, pollMs: 20 })
   assert.deepEqual(vivos, [])
   assert.ok(Date.now() - inicio >= 250, 'esperou o processo sair')
 })
